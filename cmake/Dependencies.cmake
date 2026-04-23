@@ -1,25 +1,24 @@
-## Dependencies.cmake
+# # Dependencies.cmake
 # Centralized dependency management (FetchContent)
 
-include(FetchContent)
+include(CPM)
 
 # cxxopts command-line parsing library
-FetchContent_Declare(
-  cxxopts
-  GIT_REPOSITORY https://github.com/jarro2783/cxxopts.git
-  GIT_TAG v3.1.1
+CPMAddPackage(
+  NAME cxxopts
+  GITHUB_REPOSITORY jarro2783/cxxopts
+  GIT_TAG v3.0.0
 )
-FetchContent_MakeAvailable(cxxopts)
 
-# googletest (only when this is the top-level project or testing is enabled)
+# googletest
 if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME OR BUILD_TESTING)
-    enable_testing()
-    FetchContent_Declare(
-      googletest
-      GIT_REPOSITORY https://github.com/google/googletest.git
-      GIT_TAG v1.17.0
-    )
-    # Avoid CRT linkage issues on Windows MSVC
-    set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
-    FetchContent_MakeAvailable(googletest)
+  enable_testing()
+  CPMAddPackage(
+    NAME googletest
+    GITHUB_REPOSITORY google/googletest
+    GIT_TAG v1.15.2
+    OPTIONS
+    "BUILD_GMOCK OFF"
+    "INSTALL_GTEST OFF"
+  )
 endif()
