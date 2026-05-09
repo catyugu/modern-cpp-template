@@ -6,4 +6,4 @@ namespace myproject {
     {
         return std::format("Hello, {}! Welcome to modern C++20.", name);
     }
-}
+} // namespace myproject
