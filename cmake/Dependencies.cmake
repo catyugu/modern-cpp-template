@@ -16,7 +16,7 @@ if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME OR BUILD_TESTING)
   CPMAddPackage(
     NAME googletest
     GITHUB_REPOSITORY google/googletest
-    GIT_TAG "main"
+    GIT_TAG "d72f9c8"
     OPTIONS
     "BUILD_GMOCK OFF"
     "INSTALL_GTEST OFF"
