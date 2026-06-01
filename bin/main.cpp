@@ -1,11 +1,11 @@
+#include "config.h"
 #include "myproject/core.hpp"
 #include <cxxopts.hpp>
 #include <iostream>
 
-
 int main(int argc, char** argv)
 {
-    cxxopts::Options options("MyProject", "A modern C++ project executable");
+    cxxopts::Options options(std::string(myproject::config::PROJECT_NAME), "A modern C++ project executable");
 
     options.add_options()("n,name", "Name to greet", cxxopts::value<std::string>()->default_value("World"))("h,help", "Print usage");
 
@@ -18,6 +18,10 @@ int main(int argc, char** argv)
 
     std::string name = result["name"].as<std::string>();
     std::cout << myproject::get_greeting(name) << '\n';
+
+    std::cout << "The project version is: " << myproject::config::VERSION << '\n';
+
+    std::cout << "You are now at: " << myproject::config::PROJECT_ROOT_DIR << '\n';
 
     return 0;
 }

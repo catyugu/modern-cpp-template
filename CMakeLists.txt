@@ -14,6 +14,13 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
+configure_file(
+    ${CMAKE_SOURCE_DIR}/cmake/config.h.in
+    ${CMAKE_BINARY_DIR}/generated/config.h
+)
+
+include_directories(${CMAKE_BINARY_DIR}/generated)
+
 # --- 依赖管理 (centralized in cmake/Dependencies.cmake) ---
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(cmake/Dependencies.cmake)

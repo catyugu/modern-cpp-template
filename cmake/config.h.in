@@ -1,0 +1,15 @@
+#include <string_view>
+
+// clang-format off
+namespace myproject::config {
+
+    constexpr inline std::string_view PROJECT_NAME = "@PROJECT_NAME@";
+
+    constexpr inline int VERSION_MAJOR = @PROJECT_VERSION_MAJOR@;
+    constexpr inline int VERSION_MINOR = @PROJECT_VERSION_MINOR@;
+    constexpr inline int VERSION_PATCH = @PROJECT_VERSION_PATCH@;
+
+    constexpr inline std::string_view VERSION = "@PROJECT_VERSION@";
+
+    constexpr inline std::string_view PROJECT_ROOT_DIR = "@PROJECT_SOURCE_DIR@";
+}
