@@ -9,6 +9,8 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+set(CPM_SOURCE_CACHE "${CMAKE_SOURCE_DIR}/.cache/cpm" CACHE PATH "CPM cache to avoid repeated fetching")
+
 option(MYPROJECT_BUILD_EXAMPLES "build examples" ON)
 option(MYPROJECT_BUILD_TESTS "build tests" ON)
 option(MYPROJECT_BUILD_TOOLS "build tools" ON)
