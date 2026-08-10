@@ -1,5 +1,5 @@
 # # Dependencies.cmake
-# Centralized dependency management (FetchContent)
+# Centralized dependency management (CPM / FetchContent)
 
 include(CPM)
 
@@ -11,8 +11,7 @@ CPMAddPackage(
 )
 
 # googletest
-if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME OR BUILD_TESTING)
-  enable_testing()
+if(MYPROJECT_BUILD_TESTS)
   CPMAddPackage(
     NAME googletest
     GITHUB_REPOSITORY google/googletest

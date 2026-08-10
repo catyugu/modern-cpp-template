@@ -1,9 +1,9 @@
 add_executable(myproject_test test_core.cpp)
 
 # 链接内部库和 gtest (gtest_main 包含了自带的 main 函数)
-target_link_libraries(myproject_test 
-    PRIVATE 
-        MyProject::myproject_lib
+target_link_libraries(myproject_test
+    PRIVATE
+        myproject
         GTest::gtest_main
 )
 
