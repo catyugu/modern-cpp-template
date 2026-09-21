@@ -1,4 +1,4 @@
-#include "config.h"
+#include "myproject/config.h"
 #include "myproject/core.hpp"
 #include <cxxopts.hpp>
 #include <iostream>
@@ -20,8 +20,6 @@ int main(int argc, char** argv)
     std::cout << myproject::get_greeting(name) << '\n';
 
     std::cout << "The project version is: " << myproject::config::VERSION << '\n';
-
-    std::cout << "You are now at: " << myproject::config::PROJECT_ROOT_DIR << '\n';
 
     return 0;
 }

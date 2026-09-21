@@ -1,6 +1,7 @@
 #pragma once
+#include "myproject/export.hpp"
 #include <string>
 
 namespace myproject {
-    std::string get_greeting(const std::string& name);
+    MYPROJECT_API std::string get_greeting(const std::string& name);
 }

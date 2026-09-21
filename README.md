@@ -8,7 +8,7 @@
 - **现代 CMake**：顶层 `CMakeLists.txt`（含库目标定义）+ `cmake/myprojectOptions.cmake`（跨编译器/配置的编译选项 INTERFACE 目标）+ `include/` 与 `src/`。
 - **中央化依赖**：通过 `cmake/Dependencies.cmake` 使用 CPM 管理 `cxxopts` 与 `googletest`。
 - **可测性**：内置 GoogleTest 示例与 `CTest` 集成。
-- **可配置构建项**：`MYPROJECT_BUILD_EXAMPLES` / `MYPROJECT_BUILD_TESTS` / `MYPROJECT_BUILD_TOOLS` 分别开关示例、测试与工具。
+- **可配置构建项**：`MYPROJECT_BUILD_EXAMPLES` / `MYPROJECT_BUILD_TESTS` / `MYPROJECT_BUILD_TOOLS` 分别开关示例、测试与工具，`MYPROJECT_INSTALL` 开关安装规则；作为子项目嵌入时它们默认关闭，只构建库目标 `myproject`（别名 `myproject::myproject`）。
 
 ## 要求
 
@@ -70,6 +70,7 @@ cmake --build . --target test
 - `CMakeLists.txt`：顶层 CMake 配置（选项、BUILD_TYPE、CPU 并行度、依赖、库目标 `myproject` 与子目录）
 - `cmake/myprojectOptions.cmake`：跨编译器（GNU/MSVC 前端）与配置（Debug/Release/RelWithDebInfo）的编译/链接选项
 - `cmake/Dependencies.cmake`：集中依赖声明（CPM）
+- `cmake/myprojectConfig.cmake.in`：安装后供 `find_package(myproject)` 使用的包配置模板
 - `include/myproject/`：公共头文件（`#include "myproject/core.hpp"`）
 - `src/`：库目标的源代码实现
 - `tests/`：单元测试

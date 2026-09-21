@@ -10,6 +10,4 @@ namespace myproject::config {
     constexpr inline int VERSION_PATCH = @PROJECT_VERSION_PATCH@;
 
     constexpr inline std::string_view VERSION = "@PROJECT_VERSION@";
-
-    constexpr inline std::string_view PROJECT_ROOT_DIR = "@PROJECT_SOURCE_DIR@";
 }
