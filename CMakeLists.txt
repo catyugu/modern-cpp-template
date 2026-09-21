@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.24)
+cmake_minimum_required(VERSION 3.26)
 
 # 默认项目名称，会被 Python 脚本替换
 project(MyProject VERSION 0.1.0 LANGUAGES CXX C)
@@ -61,11 +61,12 @@ target_include_directories(myproject PUBLIC
     ${PROJECT_SOURCE_DIR}/src
 )
 
-# 严格编译选项与 cxxopts 都只是本仓库的构建期依赖：用 BUILD_INTERFACE 包住后
-# 既不成为 myproject 的对外使用需求，也不会被 install(EXPORT) 要求一起导出
+# 严格编译选项与第三方依赖都只是本仓库的构建期需求：用 BUILD_INTERFACE 包住后
+# 既不成为 myproject 的对外使用需求，也不会被 install(EXPORT) 要求一起导出。
+# 依赖本身在 cmake/Dependencies.cmake 里声明并挂到 myproject_dependencies 上。
 target_link_libraries(myproject PRIVATE
     $<BUILD_INTERFACE:myproject_options>
-    $<BUILD_INTERFACE:cxxopts::cxxopts>
+    $<BUILD_INTERFACE:myproject_dependencies>
 )
 
 # C++20 是 myproject 向使用方发布的唯一要求
@@ -85,15 +86,13 @@ target_compile_options(myproject PRIVATE
     >
 )
 
-# 共享库构建时把动态库放到使用它的可执行文件旁边，保证构建树里能直接运行、ctest 能找到
+# 把目标依赖的运行时 DLL 拷到它自己所在目录，保证构建树里可直接运行、ctest 能找到。
+# $<TARGET_RUNTIME_DLLS:> 会枚举全部传递依赖里的 SHARED 目标，且在非 DLL 平台恒为空，
+# 因此这里不需要平台或 BUILD_SHARED_LIBS 判断（-t 形式的 copy 需要 CMake 3.26）。
 function(myproject_stage_runtime target)
-    if(NOT BUILD_SHARED_LIBS)
-        return()
-    endif()
     add_custom_command(TARGET ${target} POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        $<TARGET_FILE:myproject>
-        $<TARGET_FILE_DIR:${target}>
+        COMMAND ${CMAKE_COMMAND} -E copy -t $<TARGET_FILE_DIR:${target}> $<TARGET_RUNTIME_DLLS:${target}>
+        COMMAND_EXPAND_LISTS
     )
 endfunction()
 

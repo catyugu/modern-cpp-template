@@ -12,7 +12,7 @@
 
 ## 要求
 
-- CMake >= 3.24
+- CMake >= 3.26
 - 支持的编译器：GCC / Clang / MSVC（符合 C++20）
 - 推荐生成器：Ninja（可选）
 
@@ -83,6 +83,7 @@ cmake --build . --target test
 ## 依赖
 
 - 依赖与版本管理见 `cmake/Dependencies.cmake`：通过 CPM 下载 `cxxopts`（由库的实现层 `src/cli.cpp` 使用，属于实现细节）与 `googletest`（仅测试）。
+- 新增依赖只需要在 `cmake/Dependencies.cmake` 中声明，并挂到接口目标 `myproject_dependencies` 上；顶层 `CMakeLists.txt` 不需要改动。
 - 使用 `-DBUILD_SHARED_LIBS=ON` 可构建动态库；导出宏 `MYPROJECT_API` 与共享库的运行时部署由 CMake 自动处理。
 
 ## 贡献
