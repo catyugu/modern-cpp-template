@@ -7,18 +7,11 @@
 #include <string>
 #include <vector>
 
-// myproject_wc: 类似 Unix wc 的小工具，统计给定文件的行数 / 单词数 / 字节数。
-// 默认同时输出三项；可用 -l / -w / -c 单独选择。
 int main(int argc, char** argv)
 {
     cxxopts::Options options("myproject_wc", "Count lines, words and bytes in files.");
 
-    options.add_options()
-        ("l,lines", "Print the number of lines")
-        ("w,words", "Print the number of words")
-        ("c,bytes", "Print the number of bytes")
-        ("h,help", "Print usage")
-        ("file", "File(s) to count", cxxopts::value<std::vector<std::string>>());
+    options.add_options()("l,lines", "Print the number of lines")("w,words", "Print the number of words")("c,bytes", "Print the number of bytes")("h,help", "Print usage")("file", "File(s) to count", cxxopts::value<std::vector<std::string>>());
 
     options.parse_positional({"file"});
 
@@ -64,7 +57,8 @@ int main(int argc, char** argv)
                 }
                 if (std::isspace(static_cast<unsigned char>(c))) {
                     in_word = false;
-                } else if (!in_word) {
+                }
+                else if (!in_word) {
                     ++words;
                     in_word = true;
                 }
