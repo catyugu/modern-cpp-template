@@ -1,23 +1,26 @@
+#include "myproject/cli.hpp"
 #include "myproject/config.h"
 #include "myproject/core.hpp"
-#include <cxxopts.hpp>
 #include <iostream>
 
 int main(int argc, char** argv)
 {
-    cxxopts::Options options(std::string(myproject::config::PROJECT_NAME), "A modern C++ project executable");
+    myproject::cli::Arguments arguments;
+    try {
+        arguments = myproject::cli::parse(argc, argv);
+    }
+    catch (const myproject::cli::ParseError& error) {
+        std::cerr << error.what() << '\n'
+                  << myproject::cli::usage() << '\n';
+        return 1;
+    }
 
-    options.add_options()("n,name", "Name to greet", cxxopts::value<std::string>()->default_value("World"))("h,help", "Print usage");
-
-    auto result = options.parse(argc, argv);
-
-    if (result.count("help")) {
-        std::cout << options.help() << std::endl;
+    if (arguments.help) {
+        std::cout << myproject::cli::usage() << '\n';
         return 0;
     }
 
-    std::string name = result["name"].as<std::string>();
-    std::cout << myproject::get_greeting(name) << '\n';
+    std::cout << myproject::get_greeting(arguments.name) << '\n';
 
     std::cout << "The project version is: " << myproject::config::VERSION << '\n';
 

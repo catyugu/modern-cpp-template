@@ -21,12 +21,6 @@ target_compile_options(myproject_options INTERFACE
     >
 )
 
-target_compile_options(myproject_options INTERFACE
-    $<$<AND:$<PLATFORM_ID:linux>,${_MYPROJECT_GNU_FRONTEND}>:
-    -fPIC
-    >
-)
-
 target_link_options(myproject_options INTERFACE
     $<$<AND:$<PLATFORM_ID:linux>,${_MYPROJECT_GNU_FRONTEND}>:
     -rdynamic # Required by stack traceback

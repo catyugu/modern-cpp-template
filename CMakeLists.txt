@@ -45,11 +45,12 @@ include(cmake/myprojectOptions.cmake)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(cmake/Dependencies.cmake)
 
-# library target: sources at the top-level src/, public headers under include/<project>/
+# library target: implementation in src/ (with its private headers), public headers under include/<project>/
 file(GLOB_RECURSE MYPROJECT_SOURCES CONFIGURE_DEPENDS "${PROJECT_SOURCE_DIR}/src/*.cpp" "${PROJECT_SOURCE_DIR}/src/*.cc" "${PROJECT_SOURCE_DIR}/src/*.c")
 file(GLOB_RECURSE MYPROJECT_HEADERS CONFIGURE_DEPENDS "${PROJECT_SOURCE_DIR}/include/*.h" "${PROJECT_SOURCE_DIR}/include/*.hpp")
+file(GLOB_RECURSE MYPROJECT_PRIVATE_HEADERS CONFIGURE_DEPENDS "${PROJECT_SOURCE_DIR}/src/*.h" "${PROJECT_SOURCE_DIR}/src/*.hpp")
 
-add_library(myproject ${MYPROJECT_SOURCES} ${MYPROJECT_HEADERS})
+add_library(myproject ${MYPROJECT_SOURCES} ${MYPROJECT_HEADERS} ${MYPROJECT_PRIVATE_HEADERS})
 add_library(myproject::myproject ALIAS myproject)
 
 target_include_directories(myproject PUBLIC
@@ -60,11 +61,16 @@ target_include_directories(myproject PUBLIC
     ${PROJECT_SOURCE_DIR}/src
 )
 
-# 严格编译选项只作用于本仓库自己的目标，不成为 myproject 的对外使用需求
-target_link_libraries(myproject PRIVATE myproject_options)
+# 严格编译选项与 cxxopts 都只是本仓库的构建期依赖：用 BUILD_INTERFACE 包住后
+# 既不成为 myproject 的对外使用需求，也不会被 install(EXPORT) 要求一起导出
+target_link_libraries(myproject PRIVATE
+    $<BUILD_INTERFACE:myproject_options>
+    $<BUILD_INTERFACE:cxxopts::cxxopts>
+)
 
 # C++20 是 myproject 向使用方发布的唯一要求
 target_compile_features(myproject PUBLIC cxx_std_20)
+set_target_properties(myproject PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 if(BUILD_SHARED_LIBS)
     target_compile_definitions(myproject
@@ -79,15 +85,24 @@ target_compile_options(myproject PRIVATE
     >
 )
 
+# 共享库构建时把动态库放到使用它的可执行文件旁边，保证构建树里能直接运行、ctest 能找到
+function(myproject_stage_runtime target)
+    if(NOT BUILD_SHARED_LIBS)
+        return()
+    endif()
+    add_custom_command(TARGET ${target} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        $<TARGET_FILE:myproject>
+        $<TARGET_FILE_DIR:${target}>
+    )
+endfunction()
+
 if(MYPROJECT_INSTALL)
     install(TARGETS myproject EXPORT myprojectTargets
         ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
         LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
         RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
     )
-    # myproject_options 是 myproject 的 PRIVATE 依赖，静态库会把它记进
-    # INTERFACE_LINK_LIBRARIES($<LINK_ONLY:...>)，因此必须一起导出
-    install(TARGETS myproject_options EXPORT myprojectTargets)
 
     # public header files, installed preserving the include/<project>/ layout
     install(DIRECTORY "${PROJECT_SOURCE_DIR}/include/"

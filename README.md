@@ -71,17 +71,19 @@ cmake --build . --target test
 - `cmake/myprojectOptions.cmake`：跨编译器（GNU/MSVC 前端）与配置（Debug/Release/RelWithDebInfo）的编译/链接选项
 - `cmake/Dependencies.cmake`：集中依赖声明（CPM）
 - `cmake/myprojectConfig.cmake.in`：安装后供 `find_package(myproject)` 使用的包配置模板
-- `include/myproject/`：公共头文件（`#include "myproject/core.hpp"`）
-- `src/`：库目标的源代码实现
+- `include/myproject/`：公共头文件（随安装导出），例如 `#include "myproject/core.hpp"`、`#include "myproject/cli.hpp"`
+- `src/`：库目标的实现（`core.cpp`、`cli.cpp`）
+- `src/*.hpp`：库的私有头文件（如 `options.hpp`），不随安装导出，第三方类型（如 cxxopts）只出现在这里
 - `tests/`：单元测试
-- `examples/`：示例可执行（演示内部库 + cxxopts + 生成的 config.h）
+- `examples/`：示例可执行（只用公开接口：库 + 生成的 config.h）
 - `tools/`：独立小工具（`myproject_wc`，统计文件行数/单词数/字节数）
 - `build/`：构建产物（忽略在 VCS）
 - `script/`: Python脚本
 
 ## 依赖
 
-- 依赖与版本管理见 `cmake/Dependencies.cmake`：当前通过 CPM 下载 `cxxopts`（命令行解析）与 `googletest`（单元测试）。
+- 依赖与版本管理见 `cmake/Dependencies.cmake`：通过 CPM 下载 `cxxopts`（由库的实现层 `src/cli.cpp` 使用，属于实现细节）与 `googletest`（仅测试）。
+- 使用 `-DBUILD_SHARED_LIBS=ON` 可构建动态库；导出宏 `MYPROJECT_API` 与共享库的运行时部署由 CMake 自动处理。
 
 ## 贡献
 

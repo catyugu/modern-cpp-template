@@ -1,10 +1,10 @@
-# 示例可执行：演示内部库 myproject + 第三方库 cxxopts + 生成的 config.h 的协作方式
+# 示例可执行：只依赖库的公开接口（myproject/cli.hpp 隐藏了 cxxopts）
 add_executable(myproject_example main.cpp)
 
-# 生成的 config.h 通过 myproject 的构建接口可见（<build>/include/<project>/config.h）
 target_link_libraries(myproject_example
     PRIVATE
     myproject::myproject
     myproject_options
-    cxxopts::cxxopts
 )
+
+myproject_stage_runtime(myproject_example)

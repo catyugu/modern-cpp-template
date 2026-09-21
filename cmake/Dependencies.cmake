@@ -3,12 +3,13 @@
 
 include(CPM)
 
-# cxxopts command-line parsing library
+# cxxopts command-line parsing library: 由库的实现层（src/cli.cpp）使用，属于实现细节。
+# v3.3.1 起自带 <cstdint>，可在 GCC 16 等较新编译器上构建
 if(NOT TARGET cxxopts::cxxopts)
   CPMAddPackage(
     NAME cxxopts
     GITHUB_REPOSITORY jarro2783/cxxopts
-    GIT_TAG v3.0.0
+    GIT_TAG v3.3.1
   )
 endif()
 
@@ -21,5 +22,6 @@ if(MYPROJECT_BUILD_TESTS AND NOT TARGET GTest::gtest_main)
     OPTIONS
     "BUILD_GMOCK OFF"
     "INSTALL_GTEST OFF"
+    "BUILD_SHARED_LIBS OFF"
   )
 endif()
