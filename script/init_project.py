@@ -47,7 +47,7 @@ def main():
     root_dir = Path(__file__).parent.parent.resolve()
 
     # 1. 自下而上重命名目录 (避免重命名父目录后找不到子目录)
-    #    例如 myproject/ 与 myproject/include/myproject/
+    #    例如 include/myproject/
     for root, dirs, files in os.walk(root_dir, topdown=False):
         for dirname in dirs:
             if dirname == "myproject":

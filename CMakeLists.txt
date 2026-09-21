@@ -32,13 +32,44 @@ math(EXPR JOBS "${CPU_NUMS} + ${CPU_NUMS} / 2")
 set(CMAKE_BUILD_PARALLEL_LEVEL ${JOBS} CACHE STRING "parallel compiling thread num")
 message(STATUS "Compiler default work jobs: ${CMAKE_BUILD_PARALLEL_LEVEL}")
 
+include(GNUInstallDirs)
 include(cmake/myprojectOptions.cmake)
 
 # dependencies
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(cmake/Dependencies.cmake)
 
-add_subdirectory(myproject)
+# library target: sources at the top-level src/, public headers under include/<project>/
+file(GLOB_RECURSE MYPROJECT_SOURCES CONFIGURE_DEPENDS "${PROJECT_SOURCE_DIR}/src/*.cpp" "${PROJECT_SOURCE_DIR}/src/*.cc" "${PROJECT_SOURCE_DIR}/src/*.c")
+file(GLOB_RECURSE MYPROJECT_HEADERS CONFIGURE_DEPENDS "${PROJECT_SOURCE_DIR}/include/*.h" "${PROJECT_SOURCE_DIR}/include/*.hpp")
+
+add_library(myproject STATIC ${MYPROJECT_SOURCES} ${MYPROJECT_HEADERS})
+
+target_include_directories(myproject PUBLIC
+    $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+    PRIVATE
+    ${PROJECT_SOURCE_DIR}/src
+)
+
+target_link_libraries(myproject PUBLIC myproject_options)
+
+target_compile_options(myproject PRIVATE
+    $<$<OR:$<CXX_COMPILER_ID:GNU>,$<CXX_COMPILER_ID:Clang>>:
+    -Werror
+    >
+)
+
+install(TARGETS myproject EXPORT myprojectTargets
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+)
+
+# public header files, installed preserving the include/<project>/ layout
+install(DIRECTORY "${PROJECT_SOURCE_DIR}/include/"
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+)
 
 if(MYPROJECT_BUILD_EXAMPLES)
     add_subdirectory(examples)
