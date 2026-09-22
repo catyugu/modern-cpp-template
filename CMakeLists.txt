@@ -1,5 +1,12 @@
 cmake_minimum_required(VERSION 3.26)
 
+# 目标名在整棵构建树里是全局的：同一份源码若经两条依赖路径被引入（两个子项目各自
+# add_subdirectory/FetchContent 本仓库），myproject 等目标会被重复定义并直接报错。
+# 已在构建树里就退出，让后一处引入复用已有目标。
+if(TARGET myproject::myproject)
+    return()
+endif()
+
 # 默认项目名称，会被 Python 脚本替换
 project(MyProject VERSION 0.1.0 LANGUAGES CXX C)
 
