@@ -47,8 +47,8 @@ target_compile_options(myproject_options INTERFACE
     $<$<AND:${_MYPROJECT_GNU_FRONTEND},$<CONFIG:RelWithDebInfo>>:-fno-omit-frame-pointer>
 )
 
-option(ENABLE_COVERAGE "Enable code coverage instrumentation" OFF)
-if(ENABLE_COVERAGE)
+option(MYPROJECT_ENABLE_COVERAGE "Enable code coverage instrumentation" OFF)
+if(MYPROJECT_ENABLE_COVERAGE)
     target_compile_options(myproject_options INTERFACE
         $<$<AND:${_MYPROJECT_GNU_FRONTEND},$<CONFIG:Debug>>:--coverage>
     )
