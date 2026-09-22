@@ -34,7 +34,10 @@ if(PROJECT_IS_TOP_LEVEL)
     message(STATUS "Compiler default work jobs: ${CMAKE_BUILD_PARALLEL_LEVEL}")
 endif()
 
-set(CPM_SOURCE_CACHE "${CMAKE_CURRENT_SOURCE_DIR}/.cache/cpm" CACHE PATH "CPM cache to avoid repeated fetching")
+# CPM 的源码缓存目录是本仓库的构建便利，不该替父项目决定依赖下载位置
+if(PROJECT_IS_TOP_LEVEL)
+    set(CPM_SOURCE_CACHE "${CMAKE_CURRENT_SOURCE_DIR}/.cache/cpm" CACHE PATH "CPM cache to avoid repeated fetching")
+endif()
 
 # 独立构建默认全开；作为子项目时默认只构建库目标
 option(MYPROJECT_BUILD_EXAMPLES "build examples" ${PROJECT_IS_TOP_LEVEL})
@@ -45,7 +48,6 @@ option(MYPROJECT_INSTALL "generate the install target" ${PROJECT_IS_TOP_LEVEL})
 # 生成的头文件位于构建目录，但保持与安装后一致的 include 布局
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/cmake/config.h.in ${PROJECT_BINARY_DIR}/include/myproject/config.h)
 
-include(GNUInstallDirs)
 include(cmake/myprojectOptions.cmake)
 
 # dependencies
@@ -104,6 +106,10 @@ function(myproject_stage_runtime target)
 endfunction()
 
 if(MYPROJECT_INSTALL)
+    # 安装目录布局只在真的生成安装规则时才需要，否则会给父项目缓存塞进一组
+    # CMAKE_INSTALL_* 项
+    include(GNUInstallDirs)
+
     install(TARGETS myproject EXPORT myprojectTargets
         ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
         LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
