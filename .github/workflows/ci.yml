@@ -31,7 +31,7 @@ jobs:
       BUILD_TYPE: ${{ matrix.build_type }}
       BUILD_SHARED_LIBS: ${{ matrix.shared }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Build, test and install the library
         run: ci/run_checks.sh library
@@ -49,7 +49,7 @@ jobs:
     env:
       BUILD_TYPE: Release
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       # Configures with -Werror=dev, builds, runs the parent's test plus the
       # library's own tests from the parent build directory, and runs a parent
