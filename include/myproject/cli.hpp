@@ -12,7 +12,8 @@ namespace myproject::cli {
     };
 
     // 命令行无法解析时抛出，调用方无需认识底层解析库的异常类型。
-    class ParseError : public std::runtime_error {
+    // 异常类必须导出：调用方在另一个 DSO 里按类型捕获，隐藏会让 typeinfo 对不上
+    class MYPROJECT_API ParseError : public std::runtime_error {
     public:
         explicit ParseError(const std::string& message)
             : std::runtime_error(message)

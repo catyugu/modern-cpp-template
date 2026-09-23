@@ -19,9 +19,17 @@ def replace_in_file(filepath, replacements):
         print(f"Skipping {filepath} due to error: {e}")
 
 
-def should_skip(root):
-    """跳过生成目录、版本控制与脚本自身，避免误改。"""
-    return any(x in root for x in [".git", "build", "out", "script", ".cache"])
+# 仓库内不参与改名与内容替换的目录
+SKIP_DIRS = {".git", ".cache", "build", "out", "script"}
+
+
+def should_skip(root_dir, root):
+    """跳过仓库内的生成目录、版本控制与脚本自身，避免误改。
+
+    按相对路径的路径分量匹配：检出路径里恰好含 "out"、"build" 这类子串时替换照常生效，
+    而仓库自己的 build/ 等目录不会被改名或替换。
+    """
+    return not SKIP_DIRS.isdisjoint(Path(root).relative_to(root_dir).parts)
 
 
 def main():
@@ -49,6 +57,8 @@ def main():
     # 1. 自下而上重命名目录 (避免重命名父目录后找不到子目录)
     #    例如 include/myproject/
     for root, dirs, files in os.walk(root_dir, topdown=False):
+        if should_skip(root_dir, root):
+            continue
         for dirname in dirs:
             if dirname == "myproject":
                 old_path = os.path.join(root, dirname)
@@ -60,7 +70,7 @@ def main():
     #    例如 cmake/myprojectOptions.cmake -> cmake/<namespace>Options.cmake
     #    必须先于内容替换，否则 include(cmake/xxx) 路径与实际文件名对不上
     for root, dirs, files in os.walk(root_dir, topdown=False):
-        if should_skip(root):
+        if should_skip(root_dir, root):
             continue
         for filename in files:
             new_name = filename
@@ -76,7 +86,7 @@ def main():
 
     # 3. 遍历处理文件内容
     for root, dirs, files in os.walk(root_dir):
-        if should_skip(root):
+        if should_skip(root_dir, root):
             continue
 
         for filename in files:

@@ -7,7 +7,14 @@ if(TARGET myproject::myproject)
 endif()
 
 # 默认项目名称，会被 Python 脚本替换。C 是有意保留的：模板同样适用于含 C 源码的项目
-project(MyProject VERSION 0.1.0 LANGUAGES CXX C)
+project(MyProject LANGUAGES CXX C)
+
+# 版本放在项目作用域变量里，不用 project(VERSION)：后者会把 CMAKE_PROJECT_VERSION{,_MAJOR,_MINOR,_PATCH,_TWEAK}
+# 写进 cache，父项目若自己不声明版本，就会在自己的作用域里读到本库的版本
+set(MYPROJECT_VERSION_MAJOR 0)
+set(MYPROJECT_VERSION_MINOR 1)
+set(MYPROJECT_VERSION_PATCH 0)
+set(MYPROJECT_VERSION "${MYPROJECT_VERSION_MAJOR}.${MYPROJECT_VERSION_MINOR}.${MYPROJECT_VERSION_PATCH}")
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -38,6 +45,11 @@ option(MYPROJECT_BUILD_TESTS "build tests" ${PROJECT_IS_TOP_LEVEL})
 option(MYPROJECT_BUILD_TOOLS "build tools" ${PROJECT_IS_TOP_LEVEL})
 option(MYPROJECT_WERROR "treat warnings in this project as errors" ${PROJECT_IS_TOP_LEVEL})
 option(MYPROJECT_INSTALL "generate the install target" ON)
+
+# 安装布局变量（CMAKE_INSTALL_LIBDIR 等）必须在第一次使用 ${CMAKE_INSTALL_*} 之前 include：
+# 变量在命令执行时展开，否则 $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}> 只在某个依赖
+# 恰好先 include 它时才非空，依赖一变导出目标就静默丢掉 include 目录
+include(GNUInstallDirs)
 
 # 生成的头文件位于构建目录，但保持与安装后一致的 include 布局
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/cmake/config.h.in ${PROJECT_BINARY_DIR}/include/myproject/config.h)
@@ -72,11 +84,16 @@ target_link_libraries(myproject PRIVATE
 target_compile_features(myproject PUBLIC cxx_std_20)
 
 # VERSION/SOVERSION 只对共享库有意义：ELF 上生成 libmyproject.so.0.1.0 与 .so.0 符号链接（SONAME），
-# 静态库忽略它们；Windows 的 DLL 名不受影响。SOVERSION 取主版本号，即 ABI 兼容的承诺范围
+# 静态库忽略它们；Windows 的 DLL 名不受影响。SOVERSION 取主版本号，即 ABI 兼容的承诺范围。
+# 可见性属性让共享库默认隐藏符号：ELF/Mach-O 的默认是全部导出（连内部实现一起进动态符号表），
+# 因此公开接口上的每个类型/函数都必须带 MYPROJECT_API（见 include/myproject/export.hpp）
 set_target_properties(myproject PROPERTIES
     POSITION_INDEPENDENT_CODE ON
-    VERSION ${PROJECT_VERSION}
-    SOVERSION ${PROJECT_VERSION_MAJOR}
+    CXX_VISIBILITY_PRESET hidden
+    VISIBILITY_INLINES_HIDDEN ON
+    DEBUG_POSTFIX "d"
+    VERSION ${MYPROJECT_VERSION}
+    SOVERSION ${MYPROJECT_VERSION_MAJOR}
 )
 
 if(BUILD_SHARED_LIBS)
@@ -96,8 +113,6 @@ function(myproject_stage_runtime target)
 endfunction()
 
 if(MYPROJECT_INSTALL)
-    include(GNUInstallDirs)
-
     install(TARGETS myproject ${MYPROJECT_DEPENDENCIES} EXPORT myprojectTargets
         ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
         LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
@@ -125,10 +140,11 @@ if(MYPROJECT_INSTALL)
         "${PROJECT_BINARY_DIR}/myprojectConfig.cmake"
         INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/myproject
     )
+    # 0.x 阶段的破坏性变更发生在 minor 位上：SameMajorVersion 会把 0.2.0 当成与 0.1 兼容
     write_basic_package_version_file(
         "${PROJECT_BINARY_DIR}/myprojectConfigVersion.cmake"
-        VERSION ${PROJECT_VERSION}
-        COMPATIBILITY SameMajorVersion
+        VERSION ${MYPROJECT_VERSION}
+        COMPATIBILITY SameMinorVersion
     )
     install(FILES
         "${PROJECT_BINARY_DIR}/myprojectConfig.cmake"

@@ -88,6 +88,13 @@ cmake --build . --target test
 
 使用 `-DBUILD_SHARED_LIBS=ON` 可构建动态库；导出宏 `MYPROJECT_API` 由本库按静态/共享自动切换，运行时 DLL 的部署见下一节。
 
+## 版本与 ABI
+
+- 版本定义在顶层 `CMakeLists.txt` 的 `MYPROJECT_VERSION_{MAJOR,MINOR,PATCH}`，不用 `project(VERSION)`：后者会把 `CMAKE_PROJECT_VERSION*` 写进 cache，父项目若自己不声明版本，就会在自己的作用域里读到本库的版本。
+- 安装包按 `SameMinorVersion` 声明兼容性：0.x 阶段的破坏性变更发生在 minor 位上，`SameMajorVersion` 会把 0.2.0 当成与 0.1 兼容。
+- 共享库默认隐藏符号（目标属性 `CXX_VISIBILITY_PRESET hidden`）：公开头文件里新增的每个类型/函数都必须带 `MYPROJECT_API`，否则消费者链接时找不到它（异常类尤其要注意，隐藏后跨 DSO 按类型捕获会失效）。
+- Debug 构建的库文件名带 `d` 后缀（`myprojectd.dll`、`libmyprojectd.so`），Debug 与 Release 因此可以装进同一个 prefix。
+
 ## 共享库的运行时部署
 
 本库不替使用方决定二进制放在哪里，也不往父项目的目录里拷 DLL：共享构建时 `myproject` 的 DLL/so 只出现在它自己的构建目录，安装时进 `<prefix>/bin`。使用方需要自己让可执行文件找到它，两种做法：
