@@ -27,8 +27,11 @@ CPMAddPackage(
 
 # 随 myproject 一起安装/导出的依赖目标：静态构建时导出目标会引用它（消费者链接需要它的库
 # 文件），共享构建时它的 DLL/so 也要一并安装。写真实目标名（别名不能 install）。
-# 它的头文件不装：公开头文件里没有第三方类型，消费者不需要。
+# 它的头文件不装：公开头文件里没有第三方类型，消费者不需要。fmt 无条件给目标设了 PUBLIC_HEADER，
+# 而我们的 install(TARGETS) 不装依赖的头文件 —— 清空该属性，否则 CMake 会报 author warning，
+# 父项目若以 -Werror=dev 配置就会直接失败
 set(MYPROJECT_DEPENDENCIES fmt)
+set_target_properties(fmt PROPERTIES PUBLIC_HEADER "")
 
 # googletest：只有测试使用，不进 MYPROJECT_DEPENDENCIES，由 tests/ 直接链接；
 # 优先复用父项目或系统已提供的 GTest。固定为静态库，避免 BUILD_SHARED_LIBS 把 gtest
