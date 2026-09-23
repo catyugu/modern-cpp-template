@@ -1,13 +1,12 @@
 cmake_minimum_required(VERSION 3.26)
 
-# 目标名在整棵构建树里是全局的：同一份源码若经两条依赖路径被引入（两个子项目各自
-# add_subdirectory/FetchContent 本仓库），myproject 等目标会被重复定义并直接报错。
-# 已在构建树里就退出，让后一处引入复用已有目标。
+# 同一份源码经两条路径被引入时（两个子项目各自 add_subdirectory 本仓库），目标会被重复定义；
+# 已在构建树里就退出，让后一处复用已有目标。
 if(TARGET myproject::myproject)
     return()
 endif()
 
-# 默认项目名称，会被 Python 脚本替换
+# 默认项目名称，会被 Python 脚本替换。C 是有意保留的：模板同样适用于含 C 源码的项目
 project(MyProject VERSION 0.1.0 LANGUAGES CXX C)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -15,8 +14,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
 
-# Build policy belongs to whoever owns the build. As a subproject the
-# superproject decides build type, parallel level and compile commands.
+# 构建策略属于构建的所有者：作为子项目时由父项目决定构建类型、并行度等
 if(PROJECT_IS_TOP_LEVEL)
     set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
@@ -34,24 +32,17 @@ if(PROJECT_IS_TOP_LEVEL)
     message(STATUS "Compiler default work jobs: ${CMAKE_BUILD_PARALLEL_LEVEL}")
 endif()
 
-# CPM 的源码缓存目录是本仓库的构建便利，不该替父项目决定依赖下载位置
-if(PROJECT_IS_TOP_LEVEL)
-    set(CPM_SOURCE_CACHE "${CMAKE_CURRENT_SOURCE_DIR}/.cache/cpm" CACHE PATH "CPM cache to avoid repeated fetching")
-endif()
-
 # 独立构建默认全开；作为子项目时默认只构建库目标
 option(MYPROJECT_BUILD_EXAMPLES "build examples" ${PROJECT_IS_TOP_LEVEL})
 option(MYPROJECT_BUILD_TESTS "build tests" ${PROJECT_IS_TOP_LEVEL})
 option(MYPROJECT_BUILD_TOOLS "build tools" ${PROJECT_IS_TOP_LEVEL})
-option(MYPROJECT_INSTALL "generate the install target" ${PROJECT_IS_TOP_LEVEL})
 option(MYPROJECT_WERROR "treat warnings in this project as errors" ${PROJECT_IS_TOP_LEVEL})
+option(MYPROJECT_INSTALL "generate the install target" ON)
 
 # 生成的头文件位于构建目录，但保持与安装后一致的 include 布局
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/cmake/config.h.in ${PROJECT_BINARY_DIR}/include/myproject/config.h)
 
 include(cmake/myprojectOptions.cmake)
-
-# dependencies
 include(cmake/Dependencies.cmake)
 
 # library target: implementation in src/ (with its private headers), public headers under include/<project>/
@@ -59,6 +50,7 @@ file(GLOB_RECURSE MYPROJECT_SOURCES CONFIGURE_DEPENDS "${PROJECT_SOURCE_DIR}/src
 file(GLOB_RECURSE MYPROJECT_HEADERS CONFIGURE_DEPENDS "${PROJECT_SOURCE_DIR}/include/*.h" "${PROJECT_SOURCE_DIR}/include/*.hpp")
 file(GLOB_RECURSE MYPROJECT_PRIVATE_HEADERS CONFIGURE_DEPENDS "${PROJECT_SOURCE_DIR}/src/*.h" "${PROJECT_SOURCE_DIR}/src/*.hpp")
 
+# 库目标 = 自己的源码（依赖经 MYPROJECT_DEPENDENCIES 链接，见 cmake/Dependencies.cmake）
 add_library(myproject ${MYPROJECT_SOURCES} ${MYPROJECT_HEADERS} ${MYPROJECT_PRIVATE_HEADERS})
 add_library(myproject::myproject ALIAS myproject)
 
@@ -70,12 +62,10 @@ target_include_directories(myproject PUBLIC
     ${PROJECT_SOURCE_DIR}/src
 )
 
-# 严格编译选项与第三方依赖都只是本仓库的构建期需求：用 BUILD_INTERFACE 包住后
-# 既不成为 myproject 的对外使用需求，也不会被 install(EXPORT) 要求一起导出。
-# 依赖本身在 cmake/Dependencies.cmake 里声明并挂到 myproject_dependencies 上。
+# 编译选项只用于本仓库自己的构建；依赖要进导出目标，因此不包在 BUILD_INTERFACE 里
 target_link_libraries(myproject PRIVATE
     $<BUILD_INTERFACE:myproject_options>
-    $<BUILD_INTERFACE:myproject_dependencies>
+    ${MYPROJECT_DEPENDENCIES}
 )
 
 # C++20 是 myproject 向使用方发布的唯一要求
@@ -89,9 +79,8 @@ if(BUILD_SHARED_LIBS)
     )
 endif()
 
-# 把目标依赖的运行时 DLL 拷到它自己所在目录，保证构建树里可直接运行、ctest 能找到。
-# $<TARGET_RUNTIME_DLLS:> 会枚举全部传递依赖里的 SHARED 目标，且在非 DLL 平台恒为空，
-# 因此这里不需要平台或 BUILD_SHARED_LIBS 判断（-t 形式的 copy 需要 CMake 3.26）。
+# 把目标的运行时 DLL 拷到它自己所在目录，保证构建树里可直接运行、ctest 能找到。
+# $<TARGET_RUNTIME_DLLS:> 在非 DLL 平台恒为空，所以不需要平台或 BUILD_SHARED_LIBS 判断
 function(myproject_stage_runtime target)
     add_custom_command(TARGET ${target} POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy -t $<TARGET_FILE_DIR:${target}> $<TARGET_RUNTIME_DLLS:${target}>
@@ -102,7 +91,7 @@ endfunction()
 if(MYPROJECT_INSTALL)
     include(GNUInstallDirs)
 
-    install(TARGETS myproject EXPORT myprojectTargets
+    install(TARGETS myproject ${MYPROJECT_DEPENDENCIES} EXPORT myprojectTargets
         ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
         LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
         RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}

@@ -1,19 +1,20 @@
 # Modern C++ Template (MyProject)
 
-一个基于 CMake 的现代 C++ 项目模板，使用 C++20 和 CPM/FetchContent 管理第三方依赖（示例包含 `cxxopts` 与 `googletest`）。该模板适合作为小型应用或库的起点，库目标的源码位于顶层 `src/`、公共头位于 `include/myproject/`，并配有单元测试 `tests/`、示例 `examples/` 与独立工具 `tools/`。
+一个基于 CMake 的现代 C++ 项目模板，使用 C++20 和 CPM 管理第三方依赖（示例包含 `fmt` 与 `googletest`）。库目标的源码位于 `src/`、公共头位于 `include/myproject/`，配有单元测试 `tests/`、示例 `examples/` 与独立工具 `tools/`。安装产物自包含：`find_package(myproject)` 的消费者不需要预先安装任何第三方依赖。
 
 ## 特性
 
 - **C++20**：项目启用 C++20 标准。
-- **现代 CMake**：顶层 `CMakeLists.txt`（含库目标定义）+ `cmake/myprojectOptions.cmake`（跨编译器/配置的编译选项 INTERFACE 目标）+ `include/` 与 `src/`。
-- **中央化依赖**：通过 `cmake/Dependencies.cmake` 使用 CPM 管理 `cxxopts` 与 `googletest`。
-- **可测性**：内置 GoogleTest 示例与 `CTest` 集成。
-- **可配置构建项**：`MYPROJECT_BUILD_EXAMPLES` / `MYPROJECT_BUILD_TESTS` / `MYPROJECT_BUILD_TOOLS` 分别开关示例、测试与工具，`MYPROJECT_INSTALL` 开关安装规则；作为子项目嵌入时它们默认关闭，只构建库目标 `myproject`（别名 `myproject::myproject`）。
+- **现代 CMake**：顶层 `CMakeLists.txt` 定义库目标，`cmake/myprojectOptions.cmake` 提供跨编译器/配置的编译选项。
+- **中央化依赖**：依赖只在 `cmake/Dependencies.cmake` 里出现，其余文件只引用变量 `MYPROJECT_DEPENDENCIES`。
+- **可测性**：内置 GoogleTest 示例与 CTest 集成。
+- **可配置构建项**：`MYPROJECT_BUILD_EXAMPLES` / `MYPROJECT_BUILD_TESTS` / `MYPROJECT_BUILD_TOOLS` 分别开关示例、测试与工具，作为子项目嵌入时默认关闭。`MYPROJECT_INSTALL` 默认开启（父项目导出链接了本库的 target 时，本库必须提供 export set），父项目可显式关闭。
 
 ## 要求
 
 - CMake >= 3.26
 - 支持的编译器：GCC / Clang / MSVC（符合 C++20）
+- 第三方依赖由 CPM 自动获取，无需预先安装
 - 推荐生成器：Ninja（可选）
 
 ## 快速开始
@@ -67,24 +68,32 @@ cmake --build . --target test
 
 ## 项目结构（概要）
 
-- `CMakeLists.txt`：顶层 CMake 配置（选项、BUILD_TYPE、CPU 并行度、依赖、库目标 `myproject` 与子目录）
-- `cmake/myprojectOptions.cmake`：跨编译器（GNU/MSVC 前端）与配置（Debug/Release/RelWithDebInfo）的编译/链接选项
-- `cmake/Dependencies.cmake`：集中依赖声明（CPM）
+- `CMakeLists.txt`：顶层 CMake 配置（选项、构建类型、库目标 `myproject` 与子目录）
+- `cmake/myprojectOptions.cmake`：跨编译器与配置的编译/链接选项
+- `cmake/Dependencies.cmake`：唯一的依赖声明处（CPM），并给出 `MYPROJECT_DEPENDENCIES`
 - `cmake/myprojectConfig.cmake.in`：安装后供 `find_package(myproject)` 使用的包配置模板
-- `include/myproject/`：公共头文件（随安装导出），例如 `#include "myproject/core.hpp"`、`#include "myproject/cli.hpp"`
-- `src/`：库目标的实现（`core.cpp`、`cli.cpp`）
-- `src/*.hpp`：库的私有头文件（如 `options.hpp`），不随安装导出，第三方类型（如 cxxopts）只出现在这里
-- `tests/`：单元测试
-- `examples/`：示例可执行（只用公开接口：库 + 生成的 config.h）
-- `tools/`：独立小工具（`myproject_wc`，统计文件行数/单词数/字节数）
-- `build/`：构建产物（忽略在 VCS）
-- `script/`: Python脚本
+- `include/myproject/`：公共头文件（随安装导出）
+- `src/`：库目标的实现；`src/options.hpp` 是私有头文件，不随安装导出
+- `tests/`、`examples/`、`tools/`：单元测试、示例、独立小工具（工具不使用第三方库）
+- `script/`：Python 脚本
 
 ## 依赖
 
-- 依赖与版本管理见 `cmake/Dependencies.cmake`：通过 CPM 下载 `cxxopts`（由库的实现层 `src/cli.cpp` 使用，属于实现细节）与 `googletest`（仅测试）。
-- 新增依赖只需要在 `cmake/Dependencies.cmake` 中声明，并挂到接口目标 `myproject_dependencies` 上；顶层 `CMakeLists.txt` 不需要改动。
-- 使用 `-DBUILD_SHARED_LIBS=ON` 可构建动态库；导出宏 `MYPROJECT_API` 与共享库的运行时部署由 CMake 自动处理。
+依赖都在 `cmake/Dependencies.cmake` 里用 CPM 获取（含依赖自身的编译），并按是否需要随安装产物分发分成两类：
+
+- **进入 `MYPROJECT_DEPENDENCIES` 的依赖（当前是 `fmt`）**：与 `myproject` 一起安装并导出。静态构建时导出目标会引用它（消费者链接需要它的库文件），所以它的库文件必须一起安装；共享构建时它的 DLL/so 也一并装到 `bin/`。它的头文件不装 —— 公开头文件里没有第三方类型，消费者不需要。
+- **只在构建期使用的依赖（`googletest`）**：由 `tests/` 直接链接，不进 `MYPROJECT_DEPENDENCIES`。
+
+安装产物因此是自包含的：消费者 `find_package(myproject)` 后即可链接运行，不必自己安装 fmt。新增依赖时按上面的标准决定要不要加进 `MYPROJECT_DEPENDENCIES`（写真实目标名，别名不能 install）。
+
+使用 `-DBUILD_SHARED_LIBS=ON` 可构建动态库；导出宏 `MYPROJECT_API` 与共享库的运行时部署由 CMake 自动处理。
+
+## 作为子项目嵌入
+
+- 在 `add_subdirectory` **之前** `enable_testing()`（或 `include(CTest)`），否则 `-DMYPROJECT_BUILD_TESTS=ON` 构建出的测试不会出现在父项目的 `ctest -N` 里。
+- 父项目若需要 GTest，请提供 `GTest::gtest_main`（本库会复用）；本库自己拉取时固定 `BUILD_GMOCK OFF`。
+- 父项目应先声明自己的依赖版本：CPM 在整棵构建树里是全局单例，同名依赖以第一次 `CPMAddPackage` 为准。
+- 本库不需要父项目提供任何第三方依赖。
 
 ## 贡献
 

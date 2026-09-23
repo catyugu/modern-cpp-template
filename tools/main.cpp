@@ -1,36 +1,57 @@
 #include <cctype>
 #include <cstddef>
-#include <cxxopts.hpp>
 #include <fstream>
+#include <iomanip>
 #include <iostream>
 #include <iterator>
 #include <string>
+#include <string_view>
 #include <vector>
+
+namespace {
+
+    constexpr std::string_view usage = "Usage: myproject_wc [-l] [-w] [-c] [file ...]\n"
+                                       "Count lines, words and bytes in files.\n"
+                                       "\n"
+                                       "  -l, --lines  print the number of lines\n"
+                                       "  -w, --words  print the number of words\n"
+                                       "  -c, --bytes  print the number of bytes\n"
+                                       "  -h, --help   print usage\n";
+
+} // namespace
 
 int main(int argc, char** argv)
 {
-    cxxopts::Options options("myproject_wc", "Count lines, words and bytes in files.");
+    bool show_lines = false;
+    bool show_words = false;
+    bool show_bytes = false;
+    std::vector<std::string> files;
 
-    options.add_options()("l,lines", "Print the number of lines")("w,words", "Print the number of words")("c,bytes", "Print the number of bytes")("h,help", "Print usage")("file", "File(s) to count", cxxopts::value<std::vector<std::string>>());
-
-    options.parse_positional({"file"});
-
-    auto result = options.parse(argc, argv);
-
-    if (result.count("help")) {
-        std::cout << options.help() << '\n';
-        return 0;
+    for (int index = 1; index < argc; ++index) {
+        const std::string_view argument = argv[index];
+        if (argument == "-l" || argument == "--lines") {
+            show_lines = true;
+        }
+        else if (argument == "-w" || argument == "--words") {
+            show_words = true;
+        }
+        else if (argument == "-c" || argument == "--bytes") {
+            show_bytes = true;
+        }
+        else if (argument == "-h" || argument == "--help") {
+            std::cout << usage;
+            return 0;
+        }
+        else {
+            files.emplace_back(argument);
+        }
     }
 
-    bool show_lines = result.count("lines") > 0;
-    bool show_words = result.count("words") > 0;
-    bool show_bytes = result.count("bytes") > 0;
     if (!show_lines && !show_words && !show_bytes) {
         // 未指定任何标志时与 wc 一致：全部输出
         show_lines = show_words = show_bytes = true;
     }
 
-    const auto files = result["file"].as<std::vector<std::string>>();
     if (files.empty()) {
         std::cerr << "myproject_wc: no input files (use -h for help)\n";
         return 1;
@@ -64,18 +85,18 @@ int main(int argc, char** argv)
                 }
             }
         }
-        const std::size_t bytes = content.size();
 
+        // 计数右对齐，列宽与 Unix wc 一致
         if (show_lines) {
-            std::cout << lines << ' ';
+            std::cout << std::setw(8) << lines;
         }
         if (show_words) {
-            std::cout << words << ' ';
+            std::cout << std::setw(8) << words;
         }
         if (show_bytes) {
-            std::cout << bytes << ' ';
+            std::cout << std::setw(8) << content.size();
         }
-        std::cout << path << '\n';
+        std::cout << ' ' << path << '\n';
     }
 
     return exit_code;

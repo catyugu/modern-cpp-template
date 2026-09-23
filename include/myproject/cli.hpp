@@ -5,7 +5,7 @@
 
 namespace myproject::cli {
 
-    // 解析后的命令行结果。这里只出现标准库类型：cxxopts 是库的实现细节，不进入公开接口。
+    // 解析后的命令行结果。这里只出现标准库类型：解析实现属于库的内部细节。
     struct Arguments {
         std::string name = "World";
         bool help = false;
