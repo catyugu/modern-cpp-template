@@ -94,6 +94,7 @@ cmake --build . --target test
 - 安装包按 `SameMinorVersion` 声明兼容性：0.x 阶段的破坏性变更发生在 minor 位上，`SameMajorVersion` 会把 0.2.0 当成与 0.1 兼容。
 - 共享库默认隐藏符号（目标属性 `CXX_VISIBILITY_PRESET hidden`）：公开头文件里新增的每个类型/函数都必须带 `MYPROJECT_API`，否则消费者链接时找不到它（异常类尤其要注意，隐藏后跨 DSO 按类型捕获会失效）。
 - Debug 构建的库文件名带 `d` 后缀（`myprojectd.dll`、`libmyprojectd.so`），Debug 与 Release 因此可以装进同一个 prefix。
+- 公开头文件必须保持纯 ASCII（注释写英文）：MSVC 默认按系统代码页解析源文件，而消费者不会继承本仓库的 `/utf-8`，头文件里出现非 ASCII 字节会让使用方的编译直接失败。
 
 ## 共享库的运行时部署
 

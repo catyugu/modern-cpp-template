@@ -5,14 +5,22 @@
 
 namespace myproject::cli {
 
-    // 解析后的命令行结果。这里只出现标准库类型：解析实现属于库的内部细节。
+    // Parsed command line. Only standard library types appear here: how the
+    // command line is parsed stays a detail of the library.
     struct Arguments {
         std::string name = "World";
         bool help = false;
     };
 
-    // 命令行无法解析时抛出，调用方无需认识底层解析库的异常类型。
-    // 异常类必须导出：调用方在另一个 DSO 里按类型捕获，隐藏会让 typeinfo 对不上
+    // Thrown when the command line cannot be parsed; callers do not need to know
+    // the underlying parser's exception type. The class must be exported so that
+    // a caller catching it by type from another DSO matches the same typeinfo.
+    // MSVC warns C4275 for an exported class deriving from a standard library
+    // type; the export is required, so the warning is silenced here.
+#if defined(_MSC_VER)
+#    pragma warning(push)
+#    pragma warning(disable : 4275)
+#endif
     class MYPROJECT_API ParseError : public std::runtime_error {
     public:
         explicit ParseError(const std::string& message)
@@ -20,6 +28,9 @@ namespace myproject::cli {
         {
         }
     };
+#if defined(_MSC_VER)
+#    pragma warning(pop)
+#endif
 
     MYPROJECT_API Arguments parse(int argc, char** argv);
     MYPROJECT_API std::string usage();

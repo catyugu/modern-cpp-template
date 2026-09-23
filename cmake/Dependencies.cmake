@@ -22,12 +22,15 @@ endif()
 
 # fmt：编译型依赖，由实现层（src/core.cpp、src/cli.cpp）使用；获取与构建都交给 CPM/fmt 自己。
 # FMT_MODULE OFF：不需要它额外构建一份 C++20 模块目标（这是 fmt 自己文档化的选项）
+# FMT_SYSTEM_HEADERS ON：把 fmt 的头文件作为 SYSTEM 包含目录。MSVC 下 /WX（MYPROJECT_WERROR
+# 默认在顶层开启）会把 fmt 头文件里的 C4127 变成编译错误，本仓库的源码本身没有警告
 CPMAddPackage(
   NAME fmt
   GITHUB_REPOSITORY fmtlib/fmt
   GIT_TAG 12.2.0
   OPTIONS
   "FMT_MODULE OFF"
+  "FMT_SYSTEM_HEADERS ON"
 )
 
 # 随 myproject 一起安装/导出的依赖目标：静态构建时导出目标会引用它（消费者链接需要它的库

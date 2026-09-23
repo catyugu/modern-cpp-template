@@ -25,11 +25,17 @@ set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
 if(PROJECT_IS_TOP_LEVEL)
     set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-    if(NOT CMAKE_CONFIGURATION_TYPES AND NOT CMAKE_BUILD_TYPE)
-        set(CMAKE_BUILD_TYPE Debug CACHE STRING "Choose the type of build." FORCE)
+    # 多配置生成器（Visual Studio / Xcode / Ninja Multi-Config）里 CMAKE_BUILD_TYPE 不是 cache
+    # 变量，对它的 CACHE 操作会让 configure 直接失败
+    if(NOT CMAKE_CONFIGURATION_TYPES)
+        if(NOT CMAKE_BUILD_TYPE)
+            set(CMAKE_BUILD_TYPE Debug CACHE STRING "Choose the type of build." FORCE)
+        endif()
+        set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS Debug Release RelWithDebInfo MinSizeRel)
+        message(STATUS "Build Type: ${CMAKE_BUILD_TYPE}")
+    else()
+        message(STATUS "Multi-config generator: ${CMAKE_CONFIGURATION_TYPES}")
     endif()
-    set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS Debug Release RelWithDebInfo MinSizeRel)
-    message(STATUS "Build Type: ${CMAKE_BUILD_TYPE}")
 
     # Automatically detect CPU core number.
     cmake_host_system_information(RESULT CPU_NUMS QUERY NUMBER_OF_LOGICAL_CORES)
