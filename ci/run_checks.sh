@@ -29,7 +29,11 @@ CPM_SOURCE_CACHE="${CPM_SOURCE_CACHE:-$BUILD_ROOT/cpm-cache}"
 
 if [ -z "${GENERATOR:-}" ]; then
     case "$(uname -s)" in
-        MINGW* | MSYS* | CYGWIN*) GENERATOR="Visual Studio 17 2022" ;;
+        MINGW* | MSYS* | CYGWIN*)
+            # The platform default is the newest Visual Studio installed. Naming
+            # a version explicitly breaks on runner images that ship another one.
+            GENERATOR="$(cmake --help 2>/dev/null | awk '/^\*/ {sub(/^\* */, ""); sub(/ *=.*/, ""); print; exit}')"
+            ;;
         *) GENERATOR="Ninja" ;;
     esac
 fi
@@ -40,16 +44,18 @@ if [ "$GENERATOR" = "Ninja" ] && ! command -v ninja >/dev/null 2>&1; then
     GENERATOR="Unix Makefiles"
 fi
 
-generator_args=(-G "$GENERATOR")
+generator_args=()
 case "$GENERATOR" in
-    "Visual Studio"*) generator_args+=(-A x64) ;;
+    "") : ;; # nothing resolved: let CMake pick
+    "Visual Studio"*) generator_args=(-G "$GENERATOR" -A x64) ;;
+    *) generator_args=(-G "$GENERATOR") ;;
 esac
 
 # Multi-config generators select the configuration at build time and reject
 # CMAKE_BUILD_TYPE; single-config ones need it at configure time.
 multi_config=0
 case "$GENERATOR" in
-    "Visual Studio"* | Xcode | "Ninja Multi-Config") multi_config=1 ;;
+    "" | "Visual Studio"* | Xcode | "Ninja Multi-Config") multi_config=1 ;;
 esac
 config_args=()
 if [ "$multi_config" = 0 ]; then
