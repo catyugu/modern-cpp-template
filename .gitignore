@@ -43,6 +43,10 @@ build/
 Build/
 build-*/
 
+# Scratch directories used by ci/run_checks.sh
+_ci/
+_install/
+
 # CMake generated files
 CMakeFiles/
 CMakeCache.txt

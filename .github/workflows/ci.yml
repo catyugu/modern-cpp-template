@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# The same steps are runnable locally: ci/run_checks.sh <library|consumer|superproject|all>
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  library:
+    name: library (${{ matrix.os }}, ${{ matrix.build_type }}, shared=${{ matrix.shared }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        build_type: [Release, Debug]
+        # Quoted: YAML would otherwise read OFF/ON as booleans.
+        shared: ["OFF", "ON"]
+        exclude:
+          # Debug is covered on the two toolchains that differ most; the matrix
+          # would otherwise grow without adding a distinct code path.
+          - os: macos-latest
+            build_type: Debug
+    env:
+      BUILD_TYPE: ${{ matrix.build_type }}
+      BUILD_SHARED_LIBS: ${{ matrix.shared }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build, test and install the library
+        run: ci/run_checks.sh library
+
+      - name: Build and run a find_package consumer of the installed package
+        run: ci/run_checks.sh consumer
+
+  superproject:
+    name: superproject (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    env:
+      BUILD_TYPE: Release
+    steps:
+      - uses: actions/checkout@v4
+
+      # Configures with -Werror=dev, builds, runs the parent's test plus the
+      # library's own tests from the parent build directory, and runs a parent
+      # executable that links the embedded library.
+      - name: Embed the library in a superproject
+        run: ci/run_checks.sh superproject

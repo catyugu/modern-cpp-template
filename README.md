@@ -75,6 +75,7 @@ cmake --build . --target test
 - `include/myproject/`：公共头文件（随安装导出）
 - `src/`：库目标的实现；`src/options.hpp` 是私有头文件，不随安装导出
 - `tests/`、`examples/`、`tools/`：单元测试、示例、独立小工具（工具不使用第三方库）
+- `ci/`：CI 用的检查脚本与两个消费方工程（`consumer/` 用 `find_package`、`superproject/` 用 `add_subdirectory`），不参与本库自身的构建
 - `script/`：Python 脚本
 
 ## 依赖
@@ -121,6 +122,22 @@ myproject_stage_runtime(myapp) # 把 myproject 与依赖的 DLL 拷到 myapp 旁
 - `MYPROJECT_INSTALL` 默认开启，父项目**不需要**为此做任何事；但要清楚它的后果：父项目自己执行 `cmake --install` 时，会把本库的头文件、库文件与包文件（以及本库依赖的库文件）一并装进父项目的安装 prefix，`-DMYPROJECT_INSTALL=OFF` 可关掉。
 - 共享构建时本库不部署 DLL，见上一节：父项目需要对链接了本库的可执行文件自行拷贝 `$<TARGET_RUNTIME_DLLS:>` 或把本库的构建目录加入运行时搜索路径。
 - 本库不需要父项目提供任何第三方依赖。
+
+## 持续集成
+
+`.github/workflows/ci.yml` 在 ubuntu / windows / macos 上执行三步检查，脚本是 `ci/run_checks.sh`，本地可以原样运行（生成器默认 Windows 用 Visual Studio、其余用 Ninja，Ninja 缺失时回退到 Unix Makefiles）：
+
+```bash
+ci/run_checks.sh all                  # library + consumer + superproject
+BUILD_SHARED_LIBS=ON ci/run_checks.sh all
+BUILD_TYPE=Debug ci/run_checks.sh library
+```
+
+- `library`：配置、构建、`ctest`、安装到 `_install/`。
+- `consumer`：用 `ci/consumer/`（独立的 `find_package(myproject)` 工程）验证安装产物能被外部消费，并运行它；共享构建时它会跨 DSO 按类型捕获 `myproject::cli::ParseError`。
+- `superproject`：用 `ci/superproject/` 以 `add_subdirectory` 嵌入本库，并以 `-Werror=dev` 配置、打开本库的测试，验证父项目根目录能看到父项目自己的测试与本库的 5 个测试，并运行父项目中链接了本库的可执行文件。
+
+矩阵为三个平台 × 静态/共享 × Release/Debug（macOS 只跑 Release），Windows 用多配置的 Visual Studio 生成器，其余用 Ninja。
 
 ## 贡献
 
