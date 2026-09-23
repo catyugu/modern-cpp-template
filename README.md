@@ -81,18 +81,36 @@ cmake --build . --target test
 
 依赖都在 `cmake/Dependencies.cmake` 里用 CPM 获取（含依赖自身的编译），并按是否需要随安装产物分发分成两类：
 
-- **进入 `MYPROJECT_DEPENDENCIES` 的依赖（当前是 `fmt`）**：与 `myproject` 一起安装并导出。静态构建时导出目标会引用它（消费者链接需要它的库文件），所以它的库文件必须一起安装；共享构建时它的 DLL/so 也一并装到 `bin/`。它的头文件不装 —— 公开头文件里没有第三方类型，消费者不需要。
+- **进入 `MYPROJECT_DEPENDENCIES` 的依赖（当前是 `fmt`）**：与 `myproject` 一起安装并导出。静态构建时导出目标会引用它（消费者链接需要它的库文件），所以它的库文件必须一起安装；共享构建时它的 DLL/so 也一并装到 `bin/`。它的头文件不装 —— 公开头文件里没有第三方类型，消费者不需要。因此导出里的 `myproject::fmt` 只携带库文件：它的 `INTERFACE_INCLUDE_DIRECTORIES` 指向 `<prefix>/include`，而那里没有 fmt 的头文件。消费者不要在 `find_package(myproject)` 之后 include `<fmt/...>`；要自己用 fmt 就单独 `find_package(fmt)` 或自行安装。
 - **只在构建期使用的依赖（`googletest`）**：由 `tests/` 直接链接，不进 `MYPROJECT_DEPENDENCIES`。
 
 安装产物因此是自包含的：消费者 `find_package(myproject)` 后即可链接运行，不必自己安装 fmt。新增依赖时按上面的标准决定要不要加进 `MYPROJECT_DEPENDENCIES`（写真实目标名，别名不能 install）。
 
-使用 `-DBUILD_SHARED_LIBS=ON` 可构建动态库；导出宏 `MYPROJECT_API` 与共享库的运行时部署由 CMake 自动处理。
+使用 `-DBUILD_SHARED_LIBS=ON` 可构建动态库；导出宏 `MYPROJECT_API` 由本库按静态/共享自动切换，运行时 DLL 的部署见下一节。
+
+## 共享库的运行时部署
+
+本库不替使用方决定二进制放在哪里，也不往父项目的目录里拷 DLL：共享构建时 `myproject` 的 DLL/so 只出现在它自己的构建目录，安装时进 `<prefix>/bin`。使用方需要自己让可执行文件找到它，两种做法：
+
+- **构建树里**：本仓库对自己的测试与示例调用 `myproject_stage_runtime(<target>)`（顶层 `CMakeLists.txt` 中定义；`function()` 在整棵构建树里可见），它在链接后把 `$<TARGET_RUNTIME_DLLS:>` 拷到目标自己的目录。父项目可以对链接了本库的可执行文件调用同一个函数：
+
+```cmake
+add_subdirectory(third_party/modern-cpp-template)
+add_executable(myapp main.cpp)
+target_link_libraries(myapp PRIVATE myproject::myproject)
+myproject_stage_runtime(myapp) # 把 myproject 与依赖的 DLL 拷到 myapp 旁边
+```
+
+- **安装后**：`<prefix>/bin` 必须在运行时的库搜索路径上（Windows 的 `PATH`，Linux 的 rpath 或 `LD_LIBRARY_PATH`）。使用 vcpkg 这类工具链的父项目通常不需要额外操作。
+
+缺失时表现为运行期失败（Windows 上退出码 127 / `0xc0000135`），而不是链接错误 —— 链接通过不等于能运行。只想在 ctest 里找到 DLL 的话，`set_tests_properties(<test> PROPERTIES ENVIRONMENT_MODIFICATION "PATH=path_list_prepend:$<TARGET_FILE_DIR:myproject>")` 也可以，但 `gtest_discover_tests` 的 `PRE_TEST` 发现阶段同样需要 DLL 可达。
 
 ## 作为子项目嵌入
 
 - 在 `add_subdirectory` **之前** `enable_testing()`（或 `include(CTest)`），否则 `-DMYPROJECT_BUILD_TESTS=ON` 构建出的测试不会出现在父项目的 `ctest -N` 里。
 - 父项目若需要 GTest，请提供 `GTest::gtest_main`（本库会复用）；本库自己拉取时固定 `BUILD_GMOCK OFF`。
 - 父项目应先声明自己的依赖版本：CPM 在整棵构建树里是全局单例，同名依赖以第一次 `CPMAddPackage` 为准。
+- 共享构建时本库不部署 DLL，见上一节：父项目需要对链接了本库的可执行文件自行拷贝 `$<TARGET_RUNTIME_DLLS:>` 或把本库的构建目录加入运行时搜索路径。
 - 本库不需要父项目提供任何第三方依赖。
 
 ## 贡献
