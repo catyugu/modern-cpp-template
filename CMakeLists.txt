@@ -44,6 +44,7 @@ option(MYPROJECT_BUILD_EXAMPLES "build examples" ${PROJECT_IS_TOP_LEVEL})
 option(MYPROJECT_BUILD_TESTS "build tests" ${PROJECT_IS_TOP_LEVEL})
 option(MYPROJECT_BUILD_TOOLS "build tools" ${PROJECT_IS_TOP_LEVEL})
 option(MYPROJECT_INSTALL "generate the install target" ${PROJECT_IS_TOP_LEVEL})
+option(MYPROJECT_WERROR "treat warnings in this project as errors" ${PROJECT_IS_TOP_LEVEL})
 
 # 生成的头文件位于构建目录，但保持与安装后一致的 include 布局
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/cmake/config.h.in ${PROJECT_BINARY_DIR}/include/myproject/config.h)
@@ -51,7 +52,6 @@ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/cmake/config.h.in ${PROJECT_BINARY_DI
 include(cmake/myprojectOptions.cmake)
 
 # dependencies
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(cmake/Dependencies.cmake)
 
 # library target: implementation in src/ (with its private headers), public headers under include/<project>/
@@ -89,12 +89,6 @@ if(BUILD_SHARED_LIBS)
     )
 endif()
 
-target_compile_options(myproject PRIVATE
-    $<$<OR:$<CXX_COMPILER_ID:GNU>,$<CXX_COMPILER_ID:Clang>>:
-    -Werror
-    >
-)
-
 # 把目标依赖的运行时 DLL 拷到它自己所在目录，保证构建树里可直接运行、ctest 能找到。
 # $<TARGET_RUNTIME_DLLS:> 会枚举全部传递依赖里的 SHARED 目标，且在非 DLL 平台恒为空，
 # 因此这里不需要平台或 BUILD_SHARED_LIBS 判断（-t 形式的 copy 需要 CMake 3.26）。
@@ -106,8 +100,6 @@ function(myproject_stage_runtime target)
 endfunction()
 
 if(MYPROJECT_INSTALL)
-    # 安装目录布局只在真的生成安装规则时才需要，否则会给父项目缓存塞进一组
-    # CMAKE_INSTALL_* 项
     include(GNUInstallDirs)
 
     install(TARGETS myproject EXPORT myprojectTargets

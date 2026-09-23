@@ -13,13 +13,19 @@ target_compile_options(myproject_options INTERFACE
 target_compile_options(myproject_options INTERFACE
     $<${_MYPROJECT_MSVC_FRONTEND}:
     /W4
-    /WX
     /permissive-
     /utf-8
     /bigobj
     /Zc:__cplusplus
     >
 )
+
+if(MYPROJECT_WERROR)
+    target_compile_options(myproject_options INTERFACE
+        $<${_MYPROJECT_GNU_FRONTEND}:-Werror>
+        $<${_MYPROJECT_MSVC_FRONTEND}:/WX>
+    )
+endif()
 
 target_link_options(myproject_options INTERFACE
     $<$<AND:$<PLATFORM_ID:linux>,${_MYPROJECT_GNU_FRONTEND}>:
