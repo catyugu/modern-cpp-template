@@ -8,7 +8,7 @@
 - **现代 CMake**：顶层 `CMakeLists.txt` 定义库目标，`cmake/myprojectOptions.cmake` 提供跨编译器/配置的编译选项。
 - **中央化依赖**：依赖只在 `cmake/Dependencies.cmake` 里出现，其余文件只引用变量 `MYPROJECT_DEPENDENCIES`。
 - **可测性**：内置 GoogleTest 示例与 CTest 集成。
-- **可配置构建项**：`MYPROJECT_BUILD_EXAMPLES` / `MYPROJECT_BUILD_TESTS` / `MYPROJECT_BUILD_TOOLS` 分别开关示例、测试与工具，作为子项目嵌入时默认关闭。`MYPROJECT_INSTALL` 默认开启（父项目导出链接了本库的 target 时，本库必须提供 export set），父项目可显式关闭。
+- **可配置构建项**：`MYPROJECT_BUILD_EXAMPLES` / `MYPROJECT_BUILD_TESTS` / `MYPROJECT_BUILD_TOOLS` 分别开关示例、测试与工具，作为子项目嵌入时默认关闭。`MYPROJECT_INSTALL` 默认开启（父项目导出链接了本库的 target 时，本库必须提供 export set），父项目可显式关闭；开启时父项目自己的 `cmake --install` 会连本库一起装进父项目的 prefix，见「作为子项目嵌入」。
 
 ## 要求
 
@@ -117,6 +117,7 @@ myproject_stage_runtime(myapp) # 把 myproject 与依赖的 DLL 拷到 myapp 旁
 - 在 `add_subdirectory` **之前** `enable_testing()`（或 `include(CTest)`），否则 `-DMYPROJECT_BUILD_TESTS=ON` 构建出的测试不会出现在父项目的 `ctest -N` 里。
 - 父项目若需要 GTest，请提供 `GTest::gtest_main`（本库会复用）；本库自己拉取时固定 `BUILD_GMOCK OFF`。
 - 父项目应先声明自己的依赖版本：CPM 在整棵构建树里是全局单例，同名依赖以第一次 `CPMAddPackage` 为准。
+- `MYPROJECT_INSTALL` 默认开启，父项目**不需要**为此做任何事；但要清楚它的后果：父项目自己执行 `cmake --install` 时，会把本库的头文件、库文件与包文件（以及本库依赖的库文件）一并装进父项目的安装 prefix，`-DMYPROJECT_INSTALL=OFF` 可关掉。
 - 共享构建时本库不部署 DLL，见上一节：父项目需要对链接了本库的可执行文件自行拷贝 `$<TARGET_RUNTIME_DLLS:>` 或把本库的构建目录加入运行时搜索路径。
 - 本库不需要父项目提供任何第三方依赖。
 

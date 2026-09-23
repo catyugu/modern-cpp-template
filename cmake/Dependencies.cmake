@@ -7,8 +7,13 @@
 set(CPM_DONT_UPDATE_MODULE_PATH ON)
 set(CPM_DONT_CREATE_PACKAGE_LOCK ON)
 
-# 用本仓库自带的 CPM，而不是经 CMAKE_MODULE_PATH 解析（父项目里可能有一份同名的）
-include("${CMAKE_CURRENT_LIST_DIR}/CPM.cmake")
+# CPM 是全局单例：树里已经有一份（例如父项目自己 vendor 的）就直接复用它。
+# 再 include 一份自带副本是空操作，且自带副本更新时它会在版本比较处抛 AUTHOR_WARNING
+# （那段在 CPM_INITIALIZED 提前返回之前执行），父项目以 -Werror=dev 配置就会直接失败。
+# 树里还没有 CPM 时由本文件提供；两种情况下的 CPMAddPackage 都作用于同一份 CPM
+if(NOT COMMAND CPMAddPackage)
+  include("${CMAKE_CURRENT_LIST_DIR}/CPM.cmake")
+endif()
 
 # 源码缓存只是独立构建时的便利，不该替父项目决定依赖下载位置
 if(PROJECT_IS_TOP_LEVEL)
