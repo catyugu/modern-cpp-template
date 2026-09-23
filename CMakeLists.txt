@@ -70,7 +70,14 @@ target_link_libraries(myproject PRIVATE
 
 # C++20 是 myproject 向使用方发布的唯一要求
 target_compile_features(myproject PUBLIC cxx_std_20)
-set_target_properties(myproject PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
+# VERSION/SOVERSION 只对共享库有意义：ELF 上生成 libmyproject.so.0.1.0 与 .so.0 符号链接（SONAME），
+# 静态库忽略它们；Windows 的 DLL 名不受影响。SOVERSION 取主版本号，即 ABI 兼容的承诺范围
+set_target_properties(myproject PROPERTIES
+    POSITION_INDEPENDENT_CODE ON
+    VERSION ${PROJECT_VERSION}
+    SOVERSION ${PROJECT_VERSION_MAJOR}
+)
 
 if(BUILD_SHARED_LIBS)
     target_compile_definitions(myproject
