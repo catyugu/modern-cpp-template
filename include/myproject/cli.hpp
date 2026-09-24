@@ -14,13 +14,7 @@ namespace myproject::cli {
 
     // Thrown when the command line cannot be parsed; callers do not need to know
     // the underlying parser's exception type. The class must be exported so that
-    // a caller catching it by type from another DSO matches the same typeinfo.
-    // MSVC warns C4275 for an exported class deriving from a standard library
-    // type; the export is required, so the warning is silenced here.
-#if defined(_MSC_VER)
-#    pragma warning(push)
-#    pragma warning(disable : 4275)
-#endif
+    // a caller catching it by type from another DSO matches the same typeinfo
     class MYPROJECT_API ParseError : public std::runtime_error {
     public:
         explicit ParseError(const std::string& message)
@@ -28,9 +22,6 @@ namespace myproject::cli {
         {
         }
     };
-#if defined(_MSC_VER)
-#    pragma warning(pop)
-#endif
 
     MYPROJECT_API Arguments parse(int argc, char** argv);
     MYPROJECT_API std::string usage();

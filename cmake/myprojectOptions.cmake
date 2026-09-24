@@ -17,6 +17,13 @@ target_compile_options(myproject_options INTERFACE
     /utf-8
     /bigobj
     /Zc:__cplusplus
+    # 只在 /W4 + /WX 组合下才会把正常代码变成错误的、对库代码没有可行动信号的两条：
+    # 导出类继承/内嵌标准库类型（std::string、std::runtime_error 跨 DLL 使用）是正常做法，
+    # MSVC 文档也说明这类情况可以忽略，gtest（-wd4251 -wd4275）、re2、spdlog 同样关掉。
+    # 有意义的警告一律保留：4127（常量条件表达式）、4189/4100（未使用变量/参数）、4702（不可达
+    # 代码）等照常报错，配 /WX 时仍会中断构建（已实测）
+    /wd4251 # 'type' needs to have dll-interface to be used by clients of class
+    /wd4275 # non dll-interface class used as base for dll-interface class
     >
 )
 
