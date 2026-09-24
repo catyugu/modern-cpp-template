@@ -9,6 +9,8 @@
 - **中央化依赖**：依赖只在 `cmake/Dependencies.cmake` 里出现，其余文件只引用变量 `MYPROJECT_DEPENDENCIES`。
 - **可测性**：内置 GoogleTest 示例与 CTest 集成。
 - **可配置构建项**：`MYPROJECT_BUILD_EXAMPLES` / `MYPROJECT_BUILD_TESTS` / `MYPROJECT_BUILD_TOOLS` 分别开关示例、测试与工具，作为子项目嵌入时默认关闭。`MYPROJECT_INSTALL` 默认开启（父项目导出链接了本库的 target 时，本库必须提供 export set），父项目可显式关闭；开启时父项目自己的 `cmake --install` 会连本库一起装进父项目的 prefix，见「作为子项目嵌入」。
+- **编译选项集中管理**：警告集与 `MYPROJECT_WERROR` 在 `cmake/myprojectOptions.cmake`，只作用于本仓库自己的代码；优化级别与调试信息交给 `CMAKE_BUILD_TYPE`，见「编译选项」。
+- **代码格式**：`.clang-format` + `ci/run_checks.sh format`，见「代码格式」。
 
 ## 要求
 
@@ -69,9 +71,10 @@ cmake --build . --target test
 ## 项目结构（概要）
 
 - `CMakeLists.txt`：顶层 CMake 配置（选项、构建类型、库目标 `myproject` 与子目录）
-- `cmake/myprojectOptions.cmake`：跨编译器与配置的编译/链接选项
+- `cmake/myprojectOptions.cmake`：跨编译器与配置的编译/链接选项（只作用于本仓库自己的目标）
 - `cmake/Dependencies.cmake`：唯一的依赖声明处（CPM），并给出 `MYPROJECT_DEPENDENCIES`
 - `cmake/myprojectConfig.cmake.in`：安装后供 `find_package(myproject)` 使用的包配置模板
+- `.clang-format` / `.gitattributes`：格式约定与行尾约定（索引一律 LF，`*.sh` 检出也是 LF）
 - `include/myproject/`：公共头文件（随安装导出）
 - `src/`：库目标的实现；`src/options.hpp` 是私有头文件，不随安装导出
 - `tests/`、`examples/`、`tools/`：单元测试、示例、独立小工具（工具不使用第三方库）
@@ -89,10 +92,27 @@ cmake --build . --target test
 
 使用 `-DBUILD_SHARED_LIBS=ON` 可构建动态库；导出宏 `MYPROJECT_API` 由本库按静态/共享自动切换，运行时 DLL 的部署见下一节。
 
+## 编译选项
+
+`cmake/myprojectOptions.cmake` 只放"编译本仓库自己的代码需要的"选项，并只通过 `myproject_options`（INTERFACE，PRIVATE 链接）作用于本库、测试、示例与工具，不进导出目标：
+
+- **警告集**：GNU/Clang 前端 `-Wpedantic`；MSVC 前端 `/W4 /permissive- /utf-8 /bigobj /Zc:__cplusplus` 以及 `/wd4251 /wd4275`（导出类内嵌标准库类型时，`/W4` + `/WX` 下必然报错的两条，gtest、spdlog、re2 同样关闭）。`MYPROJECT_WERROR`（默认等于是否顶层）控制 `-Werror` / `/WX`。
+- **不设置 `-O` / `-DNDEBUG` / `-g`**：优化级别与调试信息由 `CMAKE_BUILD_TYPE` 决定（CMake 默认 Release 就是 `-O3 -DNDEBUG`），而构建类型属于构建的所有者。作为子项目时目录作用域的选项会追加在父项目 `CMAKE_CXX_FLAGS_<CONFIG>` 之后并覆盖它——本库若追加 `-O2`，只有本库自己的 TU 会忽略父项目的 `-O3`。fmt、spdlog、googletest、abseil、nlohmann/json 同样不设这些。
+- **只在顶层保留的三项便利设置**：Debug 的 `-g3 -ggdb`（gdb 宏信息）、优化构建的 `-fno-omit-frame-pointer`（采样 profiler 能走栈）、Linux 上可执行目标的 `-rdynamic`（栈回溯带符号名）。`-rdynamic` 只对最终可执行目标有意义，因此只作用于本仓库自己的测试/示例/工具，父项目要用需在自己的可执行目标上加。
+- `/utf-8` 是必需的：源码注释里有非 ASCII 字符，而 MSVC 默认按系统代码页解析源文件（公开头文件则强制纯 ASCII，见「版本与 ABI」）。
+- 覆盖率：`-DMYPROJECT_ENABLE_COVERAGE=ON` 给 Debug 构建加 `--coverage`。
+
+## 代码格式
+
+- `.clang-format` 只列与 `BasedOnStyle` 不同的项，且键名以当前 clang-format 为准：被删除或改名的键（`SpacesInParentheses`、`BinPackArguments`、`Standard: Cpp11` 等）会被静默忽略，写了等于没写。
+- 格式化工作树：`clang-format -i $(git ls-files '*.h' '*.hpp' '*.cpp' '*.cc' '*.c')`。
+- 校验：`ci/run_checks.sh format`（`clang-format --dry-run -Werror`）。CI 的 format job 装的是 `pip install clang-format==23.1.1`（官方 LLVM 二进制，各 runner 版本一致）；本地版本不同可能得到不同结果。
+- `.gitattributes` 固定索引里一律 LF，`*.sh` 检出也是 LF —— CRLF 的 shell 脚本会让 Linux/macOS 上的 CI 直接失败。
+
 ## 版本与 ABI
 
 - 版本定义在顶层 `CMakeLists.txt` 的 `MYPROJECT_VERSION_{MAJOR,MINOR,PATCH}`，不用 `project(VERSION)`：后者会把 `CMAKE_PROJECT_VERSION*` 写进 cache，父项目若自己不声明版本，就会在自己的作用域里读到本库的版本。
-- 安装包按 `SameMinorVersion` 声明兼容性：0.x 阶段的破坏性变更发生在 minor 位上，`SameMajorVersion` 会把 0.2.0 当成与 0.1 兼容。
+- 安装包按 `SameMinorVersion` 声明兼容性：0.x 阶段的破坏性变更发生在 minor 位上，`SameMajorVersion` 会把 0.2.0 当成与 0.1 兼容。发布 1.0 之后破坏性变更回到 major 位，应改成 `SameMajorVersion`（`write_basic_package_version_file` 的调用在顶层 `CMakeLists.txt`）。
 - 共享库默认隐藏符号（目标属性 `CXX_VISIBILITY_PRESET hidden`）：公开头文件里新增的每个类型/函数都必须带 `MYPROJECT_API`，否则消费者链接时找不到它（异常类尤其要注意，隐藏后跨 DSO 按类型捕获会失效）。
 - Debug 构建的库文件名带 `d` 后缀（`myprojectd.dll`、`libmyprojectd.so`），Debug 与 Release 因此可以装进同一个 prefix。
 - 公开头文件必须保持纯 ASCII（注释写英文）：MSVC 默认按系统代码页解析源文件，而消费者不会继承本仓库的 `/utf-8`，头文件里出现非 ASCII 字节会让使用方的编译直接失败。
@@ -125,19 +145,19 @@ myproject_stage_runtime(myapp) # 把 myproject 与依赖的 DLL 拷到 myapp 旁
 
 ## 持续集成
 
-`.github/workflows/ci.yml` 在 ubuntu / windows / macos 上执行三步检查，脚本是 `ci/run_checks.sh`，本地可以原样运行（生成器默认 Windows 用 Visual Studio、其余用 Ninja，Ninja 缺失时回退到 Unix Makefiles）：
+`.github/workflows/ci.yml` 只有两个 job：`format`（ubuntu，`ci/run_checks.sh format`）与 `checks`（ubuntu / windows / macos × Release/Debug，macOS 只跑 Release，`ci/run_checks.sh all`）。脚本本身可原样在本地运行：
 
 ```bash
-ci/run_checks.sh all                  # library + consumer + superproject
-BUILD_SHARED_LIBS=ON ci/run_checks.sh all
-BUILD_TYPE=Debug ci/run_checks.sh library
+ci/run_checks.sh all                   # library + superproject（静态与共享各跑一遍）
+ci/run_checks.sh format                # 代码格式
+BUILD_TYPE=Debug ci/run_checks.sh all
+LINK_MODES=ON ci/run_checks.sh library # 只跑共享构建
 ```
 
-- `library`：配置、构建、`ctest`、安装到 `_install/`。
-- `consumer`：用 `ci/consumer/`（独立的 `find_package(myproject)` 工程）验证安装产物能被外部消费，并运行它；共享构建时它会跨 DSO 按类型捕获 `myproject::cli::ParseError`。
-- `superproject`：用 `ci/superproject/` 以 `add_subdirectory` 嵌入本库，并以 `-Werror=dev` 配置、打开本库的测试，验证父项目根目录能看到父项目自己的测试与本库的 5 个测试，并运行父项目中链接了本库的可执行文件。
-
-矩阵为三个平台 × 静态/共享 × Release/Debug（macOS 只跑 Release），Windows 用多配置的 Visual Studio 生成器，其余用 Ninja。
+- `library`：配置、构建、`ctest`、安装到 `_install/<mode>/`，再用 `ci/consumer/`（独立的 `find_package(myproject)` 工程）验证安装产物能被外部消费并运行它；共享构建时它会跨 DSO 按类型捕获 `myproject::cli::ParseError`。
+- `superproject`：用 `ci/superproject/` 以 `add_subdirectory` 嵌入本库并打开本库的测试，配置时把 author 警告当作错误（CMake ≥ 4.4 用 `-Werror=author`，更早的版本用改名前且仍被接受的 `-Werror=dev`），验证父项目根目录能看到父项目自己的测试与本库的 5 个测试，并运行父项目中链接了本库的可执行文件。
+- `format`：`clang-format --dry-run -Werror` 检查仓库内的 C++ 源文件。
+- 生成器不写死：Windows 用平台默认（最新 Visual Studio，多配置），其余用 Unix Makefiles；要指定别的生成器时设 `GENERATOR=Ninja`。
 
 ## 贡献
 

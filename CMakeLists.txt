@@ -146,7 +146,8 @@ if(MYPROJECT_INSTALL)
         "${PROJECT_BINARY_DIR}/myprojectConfig.cmake"
         INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/myproject
     )
-    # 0.x 阶段的破坏性变更发生在 minor 位上：SameMajorVersion 会把 0.2.0 当成与 0.1 兼容
+    # 0.x 阶段的破坏性变更发生在 minor 位上：SameMajorVersion 会把 0.2.0 当成与 0.1 兼容。
+    # 发布 1.0 之后破坏性变更回到 major 位，这里应改成 SameMajorVersion
     write_basic_package_version_file(
         "${PROJECT_BINARY_DIR}/myprojectConfigVersion.cmake"
         VERSION ${MYPROJECT_VERSION}

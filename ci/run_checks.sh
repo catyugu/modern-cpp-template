@@ -1,138 +1,151 @@
 #!/usr/bin/env bash
 #
-# Build checks used by CI, runnable by hand from any platform:
+# Checks used by CI, runnable by hand from any platform:
 #
-#   ci/run_checks.sh library       configure + build + ctest + install this repository
-#   ci/run_checks.sh consumer      build + run ci/consumer against the installed package
-#   ci/run_checks.sh superproject  configure (-Werror=dev) + build + ctest + run ci/superproject
-#   ci/run_checks.sh all
+#   ci/run_checks.sh format        clang-format --dry-run -Werror over the tracked sources
+#   ci/run_checks.sh library       build + ctest + install, then a find_package consumer
+#   ci/run_checks.sh superproject  add_subdirectory embed, author warnings as errors
+#   ci/run_checks.sh all           library + superproject (format is its own step)
+#
+# library and superproject run once per value of LINK_MODES, so a static and a
+# shared build are both covered without extra CI jobs.
 #
 # Environment (all optional):
-#   GENERATOR          "Visual Studio 17 2022" on Windows, "Ninja" elsewhere
-#   BUILD_TYPE         Release; used by single-config generators and by --config
-#   BUILD_SHARED_LIBS  OFF
-#   PREFIX             <repo>/_install
+#   BUILD_TYPE         Release
+#   LINK_MODES         "OFF ON" (BUILD_SHARED_LIBS values to check)
+#   GENERATOR          unset = platform default (newest Visual Studio on Windows,
+#                      Unix Makefiles elsewhere)
+#   PREFIX             <repo>/_install/<mode>
 #   BUILD_ROOT         <repo>/_ci
 #   CPM_SOURCE_CACHE   <BUILD_ROOT>/cpm-cache
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-# Native tools (cmake, ctest) do not understand MSYS/Cygwin paths
-if command -v cygpath >/dev/null 2>&1; then
-    REPO_DIR="$(cygpath -m "$REPO_DIR")"
-fi
 BUILD_ROOT="${BUILD_ROOT:-$REPO_DIR/_ci}"
 PREFIX="${PREFIX:-$REPO_DIR/_install}"
 BUILD_TYPE="${BUILD_TYPE:-Release}"
-BUILD_SHARED_LIBS="${BUILD_SHARED_LIBS:-OFF}"
+LINK_MODES="${LINK_MODES:-OFF ON}"
 CPM_SOURCE_CACHE="${CPM_SOURCE_CACHE:-$BUILD_ROOT/cpm-cache}"
 
-if [ -z "${GENERATOR:-}" ]; then
-    case "$(uname -s)" in
-        MINGW* | MSYS* | CYGWIN*)
-            # The platform default is the newest Visual Studio installed. Naming
-            # a version explicitly breaks on runner images that ship another one.
-            GENERATOR="$(cmake --help 2>/dev/null | awk '/^\*/ {sub(/^\* */, ""); sub(/ *=.*/, ""); print; exit}')"
-            ;;
-        *) GENERATOR="Ninja" ;;
-    esac
+# Native tools (cmake, ctest, find) do not understand MSYS/Cygwin paths, so an
+# MSYS-style absolute path in the environment is converted to a native one.
+if command -v cygpath >/dev/null 2>&1; then
+    for var in REPO_DIR BUILD_ROOT PREFIX CPM_SOURCE_CACHE; do
+        case "${!var}" in /*) printf -v "$var" '%s' "$(cygpath -m "${!var}")" ;; esac
+    done
 fi
 
-# Ninja is not installed everywhere; fall back to the platform's default.
-if [ "$GENERATOR" = "Ninja" ] && ! command -v ninja >/dev/null 2>&1; then
-    echo "ninja not found; falling back to Unix Makefiles" >&2
-    GENERATOR="Unix Makefiles"
-fi
-
+# No generator is pinned: naming "Visual Studio 17 2022" breaks on runner images
+# that ship another version, and Ninja is not installed everywhere.
 generator_args=()
-case "$GENERATOR" in
-    "") : ;; # nothing resolved: let CMake pick
-    "Visual Studio"*) generator_args=(-G "$GENERATOR" -A x64) ;;
-    *) generator_args=(-G "$GENERATOR") ;;
-esac
-
-# Multi-config generators select the configuration at build time and reject
-# CMAKE_BUILD_TYPE; single-config ones need it at configure time.
-multi_config=0
-case "$GENERATOR" in
-    "" | "Visual Studio"* | Xcode | "Ninja Multi-Config") multi_config=1 ;;
-esac
-config_args=()
-if [ "$multi_config" = 0 ]; then
-    config_args+=("-DCMAKE_BUILD_TYPE=$BUILD_TYPE")
-fi
-
-# The build tree finds the library through the rpath/staging this repository sets
-# up; a consumer of the installed package needs <prefix>/bin and <prefix>/lib on
-# the runtime search path instead. On Windows the PATH entry must be in MSYS form
-# for a native executable to find the DLL.
-run_with_runtime() { # $1 = executable
-    local exe="$1" runtime_dir="$PREFIX/bin"
-    if command -v cygpath >/dev/null 2>&1; then
-        runtime_dir="$(cygpath -u "$runtime_dir")"
-    fi
-    PATH="$runtime_dir:$PATH" \
-        LD_LIBRARY_PATH="$PREFIX/lib:${LD_LIBRARY_PATH:-}" \
-        DYLD_LIBRARY_PATH="$PREFIX/lib:${DYLD_LIBRARY_PATH:-}" \
-        "$exe"
+[ -n "${GENERATOR:-}" ] && generator_args=(-G "$GENERATOR")
+# -DCMAKE_BUILD_TYPE is ignored by multi-config generators, and --config covers them.
+configure() { # $1 = source dir, $2 = build dir, rest = extra cmake arguments
+    local src="$1" build="$2"
+    shift 2
+    cmake -S "$src" -B "$build" "${generator_args[@]}" -DCMAKE_BUILD_TYPE="$BUILD_TYPE" "$@"
 }
+
+# CMake 4.4 renamed -Werror=dev to -Werror=author. Unknown categories are ignored
+# before 4.4 and fatal from 4.4 on, so the wrong flag either loses the check or
+# fails the configure.
+case "$(cmake --version | sed -n '1s/.*version //p')" in
+    1.* | 2.* | 3.* | 4.0.* | 4.1.* | 4.2.* | 4.3.*) WERROR_FLAG="-Werror=dev" ;;
+    *) WERROR_FLAG="-Werror=author" ;;
+esac
 
 find_exe() { # $1 = directory, $2 = executable base name
     find "$1" -type f \( -name "$2" -o -name "$2.exe" \) | head -n 1
 }
 
-step_library() {
-    echo "== library: generator=$GENERATOR build_type=$BUILD_TYPE shared=$BUILD_SHARED_LIBS =="
-    cmake -S "$REPO_DIR" -B "$BUILD_ROOT/library" "${generator_args[@]}" \
-        -DBUILD_SHARED_LIBS="$BUILD_SHARED_LIBS" \
-        -DCMAKE_INSTALL_PREFIX="$PREFIX" \
-        -DCPM_SOURCE_CACHE="$CPM_SOURCE_CACHE" \
-        "${config_args[@]}"
-    cmake --build "$BUILD_ROOT/library" --config "$BUILD_TYPE"
-    ctest --test-dir "$BUILD_ROOT/library" -C "$BUILD_TYPE" --output-on-failure
-    cmake --install "$BUILD_ROOT/library" --config "$BUILD_TYPE"
+# A consumer of the installed package finds the shared library through the prefix,
+# not through the build tree's rpath. Missing it is a runtime failure (Windows:
+# exit 127 / 0xc0000135), never a link error. The PATH entry must be in MSYS form
+# or a native binary does not read it.
+run_installed() { # $1 = executable, $2 = prefix
+    local exe="$1" prefix="$2" bin="$2/bin"
+    command -v cygpath >/dev/null 2>&1 && bin="$(cygpath -u "$bin")"
+    PATH="$bin:$PATH" \
+        LD_LIBRARY_PATH="$prefix/lib:${LD_LIBRARY_PATH:-}" \
+        DYLD_LIBRARY_PATH="$prefix/lib:${DYLD_LIBRARY_PATH:-}" \
+        "$exe"
 }
 
-step_consumer() {
-    echo "== consumer: find_package(myproject) against $PREFIX =="
-    cmake -S "$REPO_DIR/ci/consumer" -B "$BUILD_ROOT/consumer" "${generator_args[@]}" \
-        -DCMAKE_PREFIX_PATH="$PREFIX" \
-        "${config_args[@]}"
-    cmake --build "$BUILD_ROOT/consumer" --config "$BUILD_TYPE"
-    local exe
-    exe="$(find_exe "$BUILD_ROOT/consumer" consumer)"
-    [ -n "$exe" ] || { echo "consumer executable not found under $BUILD_ROOT/consumer"; exit 1; }
-    run_with_runtime "$exe"
+step_format() {
+    echo "== format: clang-format --dry-run -Werror =="
+    if ! command -v clang-format >/dev/null 2>&1; then
+        echo "clang-format not found on PATH (pip install clang-format==23.1.1)" >&2
+        exit 1
+    fi
+    clang-format --version
+    local rc=0 count=0
+    while IFS= read -r file; do
+        count=$((count + 1))
+        clang-format --dry-run -Werror "$REPO_DIR/$file" || rc=1
+    done < <(git -C "$REPO_DIR" ls-files '*.h' '*.hpp' '*.cpp' '*.cc' '*.c')
+    [ "$count" -gt 0 ] || { echo "no source files to check" >&2; exit 1; }
+    echo "checked $count files"
+    return "$rc"
+}
+
+step_library() {
+    for mode in $LINK_MODES; do
+        local build="$BUILD_ROOT/library-$mode" prefix="$PREFIX/$mode"
+        echo "== library: build_type=$BUILD_TYPE shared=$mode =="
+        configure "$REPO_DIR" "$build" \
+            -DBUILD_SHARED_LIBS="$mode" \
+            -DCMAKE_INSTALL_PREFIX="$prefix" \
+            -DCPM_SOURCE_CACHE="$CPM_SOURCE_CACHE"
+        cmake --build "$build" --config "$BUILD_TYPE"
+        ctest --test-dir "$build" -C "$BUILD_TYPE" --output-on-failure
+        cmake --install "$build" --config "$BUILD_TYPE"
+
+        # Out-of-tree consumer of the installed package; for the shared build it
+        # also catches the library's exception type across the DSO boundary.
+        configure "$REPO_DIR/ci/consumer" "$BUILD_ROOT/consumer-$mode" -DCMAKE_PREFIX_PATH="$prefix"
+        cmake --build "$BUILD_ROOT/consumer-$mode" --config "$BUILD_TYPE"
+        local exe
+        exe="$(find_exe "$BUILD_ROOT/consumer-$mode" consumer)"
+        [ -n "$exe" ] || { echo "consumer executable not found" >&2; exit 1; }
+        run_installed "$exe" "$prefix"
+    done
 }
 
 step_superproject() {
-    echo "== superproject: add_subdirectory, -Werror=dev, library tests enabled =="
-    # -Werror=dev: a parent that configures with it must not be broken by this
-    # repository's own author warnings.
-    cmake -Werror=dev -S "$REPO_DIR/ci/superproject" -B "$BUILD_ROOT/superproject" "${generator_args[@]}" \
-        -DMYPROJECT_BUILD_TESTS=ON \
-        -DCPM_SOURCE_CACHE="$CPM_SOURCE_CACHE" \
-        "${config_args[@]}"
-    cmake --build "$BUILD_ROOT/superproject" --config "$BUILD_TYPE"
-    # Both the parent's own test and the library's five tests must be registered here.
-    ctest --test-dir "$BUILD_ROOT/superproject" -C "$BUILD_TYPE" --output-on-failure
-    local exe
-    exe="$(find_exe "$BUILD_ROOT/superproject" superapp)"
-    [ -n "$exe" ] || { echo "superapp executable not found under $BUILD_ROOT/superproject"; exit 1; }
-    run_with_runtime "$exe"
+    for mode in $LINK_MODES; do
+        local build="$BUILD_ROOT/superproject-$mode"
+        echo "== superproject: add_subdirectory, $WERROR_FLAG, library tests on, shared=$mode =="
+        # The parent enables testing before add_subdirectory (otherwise the
+        # library's add_test calls are dropped) and configures with author warnings
+        # as errors: this repository's own install rules and vendored modules must
+        # not raise any.
+        configure "$REPO_DIR/ci/superproject" "$build" \
+            "$WERROR_FLAG" \
+            -DBUILD_SHARED_LIBS="$mode" \
+            -DMYPROJECT_BUILD_TESTS=ON \
+            -DCPM_SOURCE_CACHE="$CPM_SOURCE_CACHE"
+        cmake --build "$build" --config "$BUILD_TYPE"
+        # The parent's own test plus the library's five must be registered here.
+        ctest --test-dir "$build" -C "$BUILD_TYPE" --output-on-failure
+        local exe
+        exe="$(find_exe "$build" superapp)"
+        [ -n "$exe" ] || { echo "superapp executable not found" >&2; exit 1; }
+        # The library stages its runtime next to the executable, so no prefix is
+        # needed here (see the README).
+        "$exe"
+    done
 }
 
 case "${1:-all}" in
+    format) step_format ;;
     library) step_library ;;
-    consumer) step_consumer ;;
     superproject) step_superproject ;;
     all)
         step_library
-        step_consumer
         step_superproject
         ;;
     *)
-        echo "usage: $(basename "$0") [library|consumer|superproject|all]" >&2
+        echo "usage: $(basename "$0") [format|library|superproject|all]" >&2
         exit 2
         ;;
 esac

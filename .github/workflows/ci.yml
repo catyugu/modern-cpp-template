@@ -6,22 +6,35 @@ on:
   pull_request:
   workflow_dispatch:
 
-# The same steps are runnable locally: ci/run_checks.sh <library|consumer|superproject|all>
+# The same steps are runnable locally: ci/run_checks.sh [format|library|superproject|all]
 defaults:
   run:
     shell: bash
 
 jobs:
-  library:
-    name: library (${{ matrix.os }}, ${{ matrix.build_type }}, shared=${{ matrix.shared }})
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      # The PyPI wheel ships the official LLVM binary, so every runner formats
+      # with the same version; a distro clang-format rewrites the tree differently.
+      - name: Install clang-format
+        run: |
+          python3 -m pip install --user --break-system-packages --disable-pip-version-check clang-format==23.1.1
+          echo "$(python3 -c "import sysconfig; print(sysconfig.get_path('scripts', 'posix_user'))")" >> "$GITHUB_PATH"
+
+      - name: Check the formatting of the tracked sources
+        run: ci/run_checks.sh format
+
+  checks:
+    name: checks (${{ matrix.os }}, ${{ matrix.build_type }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
         build_type: [Release, Debug]
-        # Quoted: YAML would otherwise read OFF/ON as booleans.
-        shared: ["OFF", "ON"]
         exclude:
           # Debug is covered on the two toolchains that differ most; the matrix
           # would otherwise grow without adding a distinct code path.
@@ -29,30 +42,12 @@ jobs:
             build_type: Debug
     env:
       BUILD_TYPE: ${{ matrix.build_type }}
-      BUILD_SHARED_LIBS: ${{ matrix.shared }}
     steps:
       - uses: actions/checkout@v5
 
-      - name: Build, test and install the library
-        run: ci/run_checks.sh library
-
-      - name: Build and run a find_package consumer of the installed package
-        run: ci/run_checks.sh consumer
-
-  superproject:
-    name: superproject (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-    env:
-      BUILD_TYPE: Release
-    steps:
-      - uses: actions/checkout@v5
-
-      # Configures with -Werror=dev, builds, runs the parent's test plus the
-      # library's own tests from the parent build directory, and runs a parent
-      # executable that links the embedded library.
-      - name: Embed the library in a superproject
-        run: ci/run_checks.sh superproject
+      # Builds and tests the library, installs it and runs a find_package consumer
+      # against the installed package, then embeds the library in a superproject
+      # (configured with author warnings as errors) and runs the parent executable
+      # -- each for a static and a shared library.
+      - name: Build, install and embed
+        run: ci/run_checks.sh all

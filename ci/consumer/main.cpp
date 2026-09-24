@@ -18,7 +18,8 @@ int main()
     try {
         char* argv[] = {const_cast<char*>("consumer"), const_cast<char*>("--unknown")};
         myproject::cli::parse(2, argv);
-    } catch (const myproject::cli::ParseError& error) {
+    }
+    catch (const myproject::cli::ParseError& error) {
         caught = 1;
         std::printf("caught: %s\n", error.what());
     }
