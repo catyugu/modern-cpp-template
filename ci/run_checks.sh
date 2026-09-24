@@ -36,14 +36,19 @@ if command -v cygpath >/dev/null 2>&1; then
 fi
 
 # No generator is pinned: naming "Visual Studio 17 2022" breaks on runner images
-# that ship another version, and Ninja is not installed everywhere.
-generator_args=()
-[ -n "${GENERATOR:-}" ] && generator_args=(-G "$GENERATOR")
+# that ship another version, and Ninja is not installed everywhere. Set
+# GENERATOR=<name> to choose one explicitly.
 # -DCMAKE_BUILD_TYPE is ignored by multi-config generators, and --config covers them.
 configure() { # $1 = source dir, $2 = build dir, rest = extra cmake arguments
     local src="$1" build="$2"
     shift 2
-    cmake -S "$src" -B "$build" "${generator_args[@]}" -DCMAKE_BUILD_TYPE="$BUILD_TYPE" "$@"
+    # No argument array here on purpose: macOS ships bash 3.2, where expanding an
+    # empty array under `set -u` is an "unbound variable" error.
+    if [ -n "${GENERATOR:-}" ]; then
+        cmake -S "$src" -B "$build" -G "$GENERATOR" -DCMAKE_BUILD_TYPE="$BUILD_TYPE" "$@"
+    else
+        cmake -S "$src" -B "$build" -DCMAKE_BUILD_TYPE="$BUILD_TYPE" "$@"
+    fi
 }
 
 # CMake 4.4 renamed -Werror=dev to -Werror=author. Unknown categories are ignored
@@ -55,7 +60,9 @@ case "$(cmake --version | sed -n '1s/.*version //p')" in
 esac
 
 find_exe() { # $1 = directory, $2 = executable base name
-    find "$1" -type f \( -name "$2" -o -name "$2.exe" \) | head -n 1
+    # -print -quit rather than piping into head: a SIGPIPE'd find fails the
+    # pipeline under `set -o pipefail`.
+    find "$1" -type f \( -name "$2" -o -name "$2.exe" \) -print -quit
 }
 
 # A consumer of the installed package finds the shared library through the prefix,
