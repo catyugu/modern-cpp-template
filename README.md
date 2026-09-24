@@ -90,6 +90,8 @@ cmake --build . --target test
 
 安装产物因此是自包含的：消费者 `find_package(myproject)` 后即可链接运行，不必自己安装 fmt。新增依赖时按上面的标准决定要不要加进 `MYPROJECT_DEPENDENCIES`（写真实目标名，别名不能 install）。
 
+安装到 prefix 的内容：库文件（`lib/`，共享构建还有 `bin/` 下的 DLL/so）、`include/` 下的公共头（只装 `*.h` 与 `*.hpp`，`include/` 里混进来的其它文件不会进消费者的 prefix）、`lib/cmake/myproject/` 下的包文件，以及 `share/doc/MyProject/LICENSE`。许可证随产物分发，打包成 vcpkg/Debian 包或再分发给第三方时不必另行补。
+
 使用 `-DBUILD_SHARED_LIBS=ON` 可构建动态库；导出宏 `MYPROJECT_API` 由本库按静态/共享自动切换，运行时 DLL 的部署见下一节。
 
 ## 编译选项

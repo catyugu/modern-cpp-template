@@ -125,12 +125,20 @@ if(MYPROJECT_INSTALL)
         RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
     )
 
-    # public header files, installed preserving the include/<project>/ layout
+    # 公共头文件，按 include/<project>/ 的布局安装。FILES_MATCHING：只装头文件，
     install(DIRECTORY "${PROJECT_SOURCE_DIR}/include/"
         DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+        FILES_MATCHING
+        PATTERN "*.h"
+        PATTERN "*.hpp"
     )
     install(FILES "${PROJECT_BINARY_DIR}/include/myproject/config.h"
         DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/myproject
+    )
+
+    # 许可证随安装产物分发；CMAKE_INSTALL_DOCDIR 由 GNUInstallDirs 按项目名给出
+    install(FILES "${PROJECT_SOURCE_DIR}/LICENSE"
+        DESTINATION ${CMAKE_INSTALL_DOCDIR}
     )
 
     include(CMakePackageConfigHelpers)
