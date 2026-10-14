@@ -147,19 +147,36 @@ myproject_stage_runtime(myapp) # 把 myproject 与依赖的 DLL 拷到 myapp 旁
 
 ## 持续集成
 
-`.github/workflows/ci.yml` 只有两个 job：`format`（ubuntu，`ci/run_checks.sh format`）与 `checks`（ubuntu / windows / macos × Release/Debug，macOS 只跑 Release，`ci/run_checks.sh all`）。脚本本身可原样在本地运行：
+`.github/workflows/ci.yml` 在推送 `main`、`agent/dev`、提交 PR 或手动触发时运行。`format` 在 Ubuntu 检查格式，其余 job 运行 `ci/run_checks.sh all`：
+
+| 平台 / 工具链 | 生成器 | 构建类型 |
+| --- | --- | --- |
+| Ubuntu / 默认编译器 | Unix Makefiles | Release、Debug |
+| macOS / AppleClang | Unix Makefiles | Release |
+| Windows / MSVC | 默认 Visual Studio | Release、Debug |
+| Windows / clang-cl（MSVC 运行库） | 默认 Visual Studio，`-T ClangCL` | Release、Debug |
+| Windows / MSYS2 UCRT64，GCC | Ninja | Release、Debug |
+| Windows / MSYS2 MINGW64，GCC | Ninja | Release、Debug |
+| Windows / MSYS2 CLANG64，Clang | Ninja | Release、Debug |
+
+每种构建类型都分别检查静态库和共享库，包括测试、安装后的消费者和父项目嵌入。MSYS2 job 使用独立环境中的编译器、CMake、Ninja 和运行库，不混用 runner 上的其他工具链。脚本本身可原样在本地运行：
 
 ```bash
 ci/run_checks.sh all                   # library + superproject（静态与共享各跑一遍）
 ci/run_checks.sh format                # 代码格式
 BUILD_TYPE=Debug ci/run_checks.sh all
 LINK_MODES=ON ci/run_checks.sh library # 只跑共享构建
+# Windows：Git Bash 中使用 Visual Studio 的 LLVM 工具集
+GENERATOR_TOOLSET=ClangCL ci/run_checks.sh all
+# MSYS2：先进入 UCRT64 / MINGW64 / CLANG64 对应的 shell，并安装其编译器、cmake、ninja
+CC=gcc CXX=g++ GENERATOR=Ninja ci/run_checks.sh all
+CC=clang CXX=clang++ GENERATOR=Ninja ci/run_checks.sh all
 ```
 
 - `library`：配置、构建、`ctest`、安装到 `_install/<mode>/`，再用 `ci/consumer/`（独立的 `find_package(myproject)` 工程）验证安装产物能被外部消费并运行它；共享构建时它会跨 DSO 按类型捕获 `myproject::cli::ParseError`。
 - `superproject`：用 `ci/superproject/` 以 `add_subdirectory` 嵌入本库并打开本库的测试，配置时把 author 警告当作错误（CMake ≥ 4.4 用 `-Werror=author`，更早的版本用改名前且仍被接受的 `-Werror=dev`），验证父项目根目录能看到父项目自己的测试与本库的 5 个测试，并运行父项目中链接了本库的可执行文件。
 - `format`：`clang-format --dry-run -Werror` 检查仓库内的 C++ 源文件。
-- 生成器不写死：Windows 用平台默认（最新 Visual Studio，多配置），其余用 Unix Makefiles；要指定别的生成器时设 `GENERATOR=Ninja`。
+- 默认生成器不写死：Windows 用平台默认（最新 Visual Studio，多配置），其余用 Unix Makefiles；要指定别的生成器时设 `GENERATOR=Ninja`。`GENERATOR_TOOLSET` 通过 `-T` 选择支持该参数的生成器工具集；`CC` / `CXX` 用于 Ninja/Makefiles。切换工具链前删除 `_ci/` 和 `_install/`，或设置不同的 `BUILD_ROOT` 与 `PREFIX`，避免复用其他工具链的构建缓存和安装产物。
 
 ## 贡献
 

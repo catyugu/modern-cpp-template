@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, agent/dev]
   pull_request:
   workflow_dispatch:
 
@@ -49,5 +49,72 @@ jobs:
       # against the installed package, then embeds the library in a superproject
       # (configured with author warnings as errors) and runs the parent executable
       # -- each for a static and a shared library.
+      - name: Build, install and embed
+        run: ci/run_checks.sh all
+
+  windows-clang-cl:
+    name: checks (windows, clang-cl, ${{ matrix.build_type }})
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        build_type: [Release, Debug]
+    env:
+      BUILD_TYPE: ${{ matrix.build_type }}
+      # Use the Visual Studio LLVM toolset, including its SDK and MSVC runtime.
+      # -T selects clang-cl explicitly without relying on the runner's PATH.
+      GENERATOR_TOOLSET: ClangCL
+    steps:
+      - uses: actions/checkout@v5
+      - name: Build, install and embed
+        run: ci/run_checks.sh all
+
+  windows-mingw:
+    name: checks (windows, ${{ matrix.toolchain.msystem }}, ${{ matrix.build_type }})
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    strategy:
+      fail-fast: false
+      matrix:
+        build_type: [Release, Debug]
+        toolchain:
+          - msystem: UCRT64
+            package_prefix: mingw-w64-ucrt-x86_64
+            compiler: gcc
+            cxx: g++
+          - msystem: MINGW64
+            package_prefix: mingw-w64-x86_64
+            compiler: gcc
+            cxx: g++
+          - msystem: CLANG64
+            package_prefix: mingw-w64-clang-x86_64
+            compiler: clang
+            cxx: clang++
+    env:
+      BUILD_TYPE: ${{ matrix.build_type }}
+      GENERATOR: Ninja
+      CC: ${{ matrix.toolchain.compiler }}
+      CXX: ${{ matrix.toolchain.cxx }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: ${{ matrix.toolchain.msystem }}
+          # Keep other runner toolchains out of the PATH; all native tools and
+          # compiler runtime DLLs must come from the same MSYS2 environment.
+          path-type: strict
+          update: true
+          install: >-
+            git
+            ${{ matrix.toolchain.package_prefix }}-${{ matrix.toolchain.compiler }}
+            ${{ matrix.toolchain.package_prefix }}-cmake
+            ${{ matrix.toolchain.package_prefix }}-ninja
+      - name: Show selected toolchain
+        run: |
+          command -v cmake ninja "$CC" "$CXX"
+          cmake --version
+          "$CXX" --version
       - name: Build, install and embed
         run: ci/run_checks.sh all

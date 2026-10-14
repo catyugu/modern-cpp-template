@@ -15,6 +15,8 @@
 #   LINK_MODES         "OFF ON" (BUILD_SHARED_LIBS values to check)
 #   GENERATOR          unset = platform default (newest Visual Studio on Windows,
 #                      Unix Makefiles elsewhere)
+#   GENERATOR_TOOLSET  unset = generator default; ClangCL for Visual Studio LLVM
+#   CC / CXX           compiler selection for Ninja/Makefiles (e.g. gcc / g++)
 #   PREFIX             <repo>/_install/<mode>
 #   BUILD_ROOT         <repo>/_ci
 #   CPM_SOURCE_CACHE   <BUILD_ROOT>/cpm-cache
@@ -42,6 +44,9 @@ fi
 configure() { # $1 = source dir, $2 = build dir, rest = extra cmake arguments
     local src="$1" build="$2"
     shift 2
+    if [ -n "${GENERATOR_TOOLSET:-}" ]; then
+        set -- -T "$GENERATOR_TOOLSET" "$@"
+    fi
     # No argument array here on purpose: macOS ships bash 3.2, where expanding an
     # empty array under `set -u` is an "unbound variable" error.
     if [ -n "${GENERATOR:-}" ]; then
