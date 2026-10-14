@@ -147,18 +147,7 @@ myproject_stage_runtime(myapp) # 把 myproject 与依赖的 DLL 拷到 myapp 旁
 
 ## 持续集成
 
-`.github/workflows/ci.yml` 在推送 `main`、`agent/dev`、提交 PR 或手动触发时运行。工作流分为格式检查、原生工具链检查和 MSYS2 工具链检查：
-
-| 平台 / 工具链 | 生成器 | CMake |
-| --- | --- | --- |
-| Ubuntu 24.04 / GCC | Ninja | 3.26.4 |
-| macOS 15 / AppleClang | Ninja | 3.26.4 |
-| Windows 2025 / MSVC | Ninja，初始化 MSVC 开发环境，`CC=CXX=cl` | 3.26.4 |
-| Windows 2025 / clang-cl | Ninja，初始化 MSVC 开发环境，`CC=CXX=clang-cl` | 3.26.4 |
-| Windows 2025 / MSYS2 UCRT64、MINGW64 / GCC | Ninja | MSYS2 当前版本 |
-| Windows 2025 / MSYS2 CLANG64 / Clang | Ninja | MSYS2 当前版本 |
-
-所有工具链都检查 Debug 和 Release，静态库和共享库各跑一遍。原生 job 使用固定的 Python、CMake 和 Ninja 版本；MSYS2 job 从同一个环境安装编译器、运行库、Python、CMake 和 Ninja。并行构建限制为 2 个进程，避免在小型 runner 上耗尽内存；同一分支的新提交会取消尚未结束的旧检查。
+`.github/workflows/ci.yml` 在推送 `main`、提交 PR 或手动触发时运行，分为格式检查、原生工具链检查和 MSYS2 工具链检查。原生侧覆盖 Ubuntu 24.04/GCC、macOS 15/AppleClang 与 Windows 2025 的 MSVC、clang-cl，MSYS2 侧覆盖 UCRT64/MINGW64 的 GCC 与 CLANG64 的 Clang；Debug/Release、静态/共享各跑一遍。全部使用 Ninja，并行度限制为 2 个进程；同一分支的新提交会取消尚未结束的旧检查。
 
 本地复现只需要 Python ≥ 3.10、CMake ≥ 3.26 和对应编译器，不依赖 Bash：
 
@@ -167,14 +156,10 @@ python ci/check_build.py
 python ci/check_build.py --config Debug --generator Ninja
 python ci/check_build.py --linkage shared --scope library
 python ci/check_build.py --toolset ClangCL  # Windows / Visual Studio LLVM
-python ci/check_format.py                 # 另需 clang-format==23.1.1
+python ci/check_format.py                   # 另需 clang-format==23.1.1
 ```
 
-Ninja/Makefiles 使用标准的 `CC`、`CXX` 环境变量选择编译器；Windows 下先进入 Visual Studio 开发者终端，再选择 `cl` 或 `clang-cl`。原生 CI 统一使用 Ninja，避免旧 CMake 无法识别新 Visual Studio 生成器的问题。MSYS2 下在对应的 UCRT64、MINGW64 或 CLANG64 shell 中运行，使用该环境的原生 Python。
-
-`ci/check_build.py` 按库构建与测试 → 安装 → `find_package` 消费者 → `add_subdirectory` 父项目的顺序检查。所有程序都由 CTest 按目标位置执行，安装后的动态库搜索路径在消费者的 CMake 中设置。检查会核对库测试是否注册，以及完整检查中父项目是否保留了独立构建的全部库测试；没有测试也会失败。
-
-每次运行在 `_ci/` 下创建独立的构建和安装目录，因此切换工具链或配置不需要手动清理缓存。目录路径会打印在日志中，成功或失败后都保留，方便排查；可用 `--build-root` 改位置、`--jobs` 改并行度、`--scope embedded` 单独检查父项目。只有依赖源码缓存 `.cache/cpm/` 在运行间共享。CI 失败时上传 CMake 和 CTest 日志，工作流步骤保留编译器输出。
+编译器用标准的 `CC`、`CXX` 选择：Windows 下先进入 Visual Studio 开发者终端再选 `cl` 或 `clang-cl`，MSYS2 下在对应的 UCRT64/MINGW64/CLANG64 shell 中运行。`ci/check_build.py` 依次检查库构建与测试、安装、`find_package` 消费者和 `add_subdirectory` 父项目，所有程序都由 CTest 执行。每次运行在 `_ci/` 下建立独立的构建与安装目录（切换工具链或配置无需清缓存，成功失败都保留便于排查，可用 `--build-root`、`--jobs`、`--scope` 调整），只有依赖缓存 `.cache/cpm/` 在运行间共享；CI 失败时上传 CMake 与 CTest 日志。
 
 ## 贡献
 
