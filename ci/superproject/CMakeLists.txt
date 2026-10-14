@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.26)
 
 # A parent project that embeds the library with add_subdirectory. Driven by
-# ci/run_checks.sh and by CI.
+# ci/check_build.py.
 project(superproject LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)

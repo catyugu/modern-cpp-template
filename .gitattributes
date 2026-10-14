@@ -2,7 +2,6 @@
 * text=auto
 
 # Shell 脚本必须始终是 LF：CRLF 会让 Linux/macOS 上的 CI 直接失败
-# （./ci/run_checks.sh: bad interpreter / $'\r': command not found）
 *.sh text eol=lf
 *.bash text eol=lf
 

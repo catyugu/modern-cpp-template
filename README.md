@@ -10,7 +10,7 @@
 - **可测性**：内置 GoogleTest 示例与 CTest 集成。
 - **可配置构建项**：`MYPROJECT_BUILD_EXAMPLES` / `MYPROJECT_BUILD_TESTS` / `MYPROJECT_BUILD_TOOLS` 分别开关示例、测试与工具，作为子项目嵌入时默认关闭。`MYPROJECT_INSTALL` 默认开启（父项目导出链接了本库的 target 时，本库必须提供 export set），父项目可显式关闭；开启时父项目自己的 `cmake --install` 会连本库一起装进父项目的 prefix，见「作为子项目嵌入」。
 - **编译选项集中管理**：警告集与 `MYPROJECT_WERROR` 在 `cmake/myprojectOptions.cmake`，只作用于本仓库自己的代码；优化级别与调试信息交给 `CMAKE_BUILD_TYPE`，见「编译选项」。
-- **代码格式**：`.clang-format` + `ci/run_checks.sh format`，见「代码格式」。
+- **代码格式**：`.clang-format` + `python ci/check_format.py`，见「代码格式」。
 
 ## 要求
 
@@ -108,7 +108,7 @@ cmake --build . --target test
 
 - `.clang-format` 只列与 `BasedOnStyle` 不同的项，且键名以当前 clang-format 为准：被删除或改名的键（`SpacesInParentheses`、`BinPackArguments`、`Standard: Cpp11` 等）会被静默忽略，写了等于没写。
 - 格式化工作树：`clang-format -i $(git ls-files '*.h' '*.hpp' '*.cpp' '*.cc' '*.c')`。
-- 校验：`ci/run_checks.sh format`（`clang-format --dry-run -Werror`）。CI 的 format job 装的是 `pip install clang-format==23.1.1`（官方 LLVM 二进制，各 runner 版本一致）；本地版本不同可能得到不同结果。
+- 校验：`python ci/check_format.py`（`clang-format --dry-run -Werror`）。CI 的 format job 装的是 `pip install clang-format==23.1.1`（官方 LLVM 二进制，各 runner 版本一致）；本地版本不同可能得到不同结果。
 - `.gitattributes` 固定索引里一律 LF，`*.sh` 检出也是 LF —— CRLF 的 shell 脚本会让 Linux/macOS 上的 CI 直接失败。
 
 ## 版本与 ABI
@@ -147,36 +147,34 @@ myproject_stage_runtime(myapp) # 把 myproject 与依赖的 DLL 拷到 myapp 旁
 
 ## 持续集成
 
-`.github/workflows/ci.yml` 在推送 `main`、`agent/dev`、提交 PR 或手动触发时运行。`format` 在 Ubuntu 检查格式，其余 job 运行 `ci/run_checks.sh all`：
+`.github/workflows/ci.yml` 在推送 `main`、`agent/dev`、提交 PR 或手动触发时运行。工作流分为格式检查、原生工具链检查和 MSYS2 工具链检查：
 
-| 平台 / 工具链 | 生成器 | 构建类型 |
+| 平台 / 工具链 | 生成器 | CMake |
 | --- | --- | --- |
-| Ubuntu / 默认编译器 | Unix Makefiles | Release、Debug |
-| macOS / AppleClang | Unix Makefiles | Release |
-| Windows / MSVC | 默认 Visual Studio | Release、Debug |
-| Windows / clang-cl（MSVC 运行库） | 默认 Visual Studio，`-T ClangCL` | Release、Debug |
-| Windows / MSYS2 UCRT64，GCC | Ninja | Release、Debug |
-| Windows / MSYS2 MINGW64，GCC | Ninja | Release、Debug |
-| Windows / MSYS2 CLANG64，Clang | Ninja | Release、Debug |
+| Ubuntu 24.04 / GCC | Ninja | 3.26.4 |
+| macOS 15 / AppleClang | Ninja | 3.26.4 |
+| Windows 2025 / MSVC | 默认 Visual Studio | 3.26.4 |
+| Windows 2025 / clang-cl | 默认 Visual Studio，`-T ClangCL` | 3.26.4 |
+| Windows 2025 / MSYS2 UCRT64、MINGW64 / GCC | Ninja | MSYS2 当前版本 |
+| Windows 2025 / MSYS2 CLANG64 / Clang | Ninja | MSYS2 当前版本 |
 
-每种构建类型都分别检查静态库和共享库，包括测试、安装后的消费者和父项目嵌入。MSYS2 job 使用独立环境中的编译器、CMake、Ninja 和运行库，不混用 runner 上的其他工具链。脚本本身可原样在本地运行：
+所有工具链都检查 Debug 和 Release，静态库和共享库各跑一遍。原生 job 使用固定的 Python、CMake 和 Ninja 版本；MSYS2 job 从同一个环境安装编译器、运行库、Python、CMake 和 Ninja。并行构建限制为 2 个进程，避免在小型 runner 上耗尽内存；同一分支的新提交会取消尚未结束的旧检查。
+
+本地复现只需要 Python ≥ 3.10、CMake ≥ 3.26 和对应编译器，不依赖 Bash：
 
 ```bash
-ci/run_checks.sh all                   # library + superproject（静态与共享各跑一遍）
-ci/run_checks.sh format                # 代码格式
-BUILD_TYPE=Debug ci/run_checks.sh all
-LINK_MODES=ON ci/run_checks.sh library # 只跑共享构建
-# Windows：Git Bash 中使用 Visual Studio 的 LLVM 工具集
-GENERATOR_TOOLSET=ClangCL ci/run_checks.sh all
-# MSYS2：先进入 UCRT64 / MINGW64 / CLANG64 对应的 shell，并安装其编译器、cmake、ninja
-CC=gcc CXX=g++ GENERATOR=Ninja ci/run_checks.sh all
-CC=clang CXX=clang++ GENERATOR=Ninja ci/run_checks.sh all
+python ci/check_build.py
+python ci/check_build.py --config Debug --generator Ninja
+python ci/check_build.py --linkage shared --scope library
+python ci/check_build.py --toolset ClangCL  # Windows / Visual Studio LLVM
+python ci/check_format.py                 # 另需 clang-format==23.1.1
 ```
 
-- `library`：配置、构建、`ctest`、安装到 `_install/<mode>/`，再用 `ci/consumer/`（独立的 `find_package(myproject)` 工程）验证安装产物能被外部消费并运行它；共享构建时它会跨 DSO 按类型捕获 `myproject::cli::ParseError`。
-- `superproject`：用 `ci/superproject/` 以 `add_subdirectory` 嵌入本库并打开本库的测试，配置时把 author 警告当作错误（CMake ≥ 4.4 用 `-Werror=author`，更早的版本用改名前且仍被接受的 `-Werror=dev`），验证父项目根目录能看到父项目自己的测试与本库的 5 个测试，并运行父项目中链接了本库的可执行文件。
-- `format`：`clang-format --dry-run -Werror` 检查仓库内的 C++ 源文件。
-- 默认生成器不写死：Windows 用平台默认（最新 Visual Studio，多配置），其余用 Unix Makefiles；要指定别的生成器时设 `GENERATOR=Ninja`。`GENERATOR_TOOLSET` 通过 `-T` 选择支持该参数的生成器工具集；`CC` / `CXX` 用于 Ninja/Makefiles。切换工具链前删除 `_ci/` 和 `_install/`，或设置不同的 `BUILD_ROOT` 与 `PREFIX`，避免复用其他工具链的构建缓存和安装产物。
+Ninja/Makefiles 使用标准的 `CC`、`CXX` 环境变量选择编译器；MSYS2 下在对应的 UCRT64、MINGW64 或 CLANG64 shell 中运行，使用该环境的原生 Python。
+
+`ci/check_build.py` 按库构建与测试 → 安装 → `find_package` 消费者 → `add_subdirectory` 父项目的顺序检查。所有程序都由 CTest 按目标位置执行，安装后的动态库搜索路径在消费者的 CMake 中设置。检查会核对库测试是否注册，以及完整检查中父项目是否保留了独立构建的全部库测试；没有测试也会失败。
+
+每次运行在 `_ci/` 下创建独立的构建和安装目录，因此切换工具链或配置不需要手动清理缓存。目录路径会打印在日志中，成功或失败后都保留，方便排查；可用 `--build-root` 改位置、`--jobs` 改并行度、`--scope embedded` 单独检查父项目。只有依赖源码缓存 `.cache/cpm/` 在运行间共享。CI 失败时上传 CMake 和 CTest 日志，工作流步骤保留编译器输出。
 
 ## 贡献
 

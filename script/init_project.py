@@ -20,7 +20,7 @@ def replace_in_file(filepath, replacements):
 
 
 # 仓库内不参与改名与内容替换的目录
-SKIP_DIRS = {".git", ".cache", "build", "out", "script"}
+SKIP_DIRS = {".git", ".cache", "_ci", "_install", "build", "out", "script"}
 
 
 def should_skip(root_dir, root):
