@@ -40,27 +40,26 @@ jobs:
             runner: ubuntu-24.04
             cc: gcc
             cxx: g++
-            arguments: --generator Ninja
           - name: macOS AppleClang
             runner: macos-15
             cc: clang
             cxx: clang++
-            arguments: --generator Ninja
           - name: Windows MSVC
             runner: windows-2025
-            cc: ''
-            cxx: ''
-            arguments: ''
+            cc: cl
+            cxx: cl
           - name: Windows clang-cl
             runner: windows-2025
-            cc: ''
-            cxx: ''
-            arguments: --toolset ClangCL
+            cc: clang-cl
+            cxx: clang-cl
     env:
       CC: ${{ matrix.platform.cc }}
       CXX: ${{ matrix.platform.cxx }}
     steps:
       - uses: actions/checkout@v5
+      - name: Set up MSVC SDK and runtime
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
@@ -69,7 +68,7 @@ jobs:
       - name: Install build tools
         run: python -m pip install cmake==3.26.4 ninja==1.13.2
       - name: Build and test static and shared packages
-        run: python ci/check_build.py --config ${{ matrix.config }} ${{ matrix.platform.arguments }}
+        run: python ci/check_build.py --config ${{ matrix.config }} --generator Ninja
       - name: Upload failure logs
         if: failure()
         uses: actions/upload-artifact@v4

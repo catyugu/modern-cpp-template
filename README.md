@@ -153,8 +153,8 @@ myproject_stage_runtime(myapp) # 把 myproject 与依赖的 DLL 拷到 myapp 旁
 | --- | --- | --- |
 | Ubuntu 24.04 / GCC | Ninja | 3.26.4 |
 | macOS 15 / AppleClang | Ninja | 3.26.4 |
-| Windows 2025 / MSVC | 默认 Visual Studio | 3.26.4 |
-| Windows 2025 / clang-cl | 默认 Visual Studio，`-T ClangCL` | 3.26.4 |
+| Windows 2025 / MSVC | Ninja，初始化 MSVC 开发环境，`CC=CXX=cl` | 3.26.4 |
+| Windows 2025 / clang-cl | Ninja，初始化 MSVC 开发环境，`CC=CXX=clang-cl` | 3.26.4 |
 | Windows 2025 / MSYS2 UCRT64、MINGW64 / GCC | Ninja | MSYS2 当前版本 |
 | Windows 2025 / MSYS2 CLANG64 / Clang | Ninja | MSYS2 当前版本 |
 
@@ -170,7 +170,7 @@ python ci/check_build.py --toolset ClangCL  # Windows / Visual Studio LLVM
 python ci/check_format.py                 # 另需 clang-format==23.1.1
 ```
 
-Ninja/Makefiles 使用标准的 `CC`、`CXX` 环境变量选择编译器；MSYS2 下在对应的 UCRT64、MINGW64 或 CLANG64 shell 中运行，使用该环境的原生 Python。
+Ninja/Makefiles 使用标准的 `CC`、`CXX` 环境变量选择编译器；Windows 下先进入 Visual Studio 开发者终端，再选择 `cl` 或 `clang-cl`。原生 CI 统一使用 Ninja，避免旧 CMake 无法识别新 Visual Studio 生成器的问题。MSYS2 下在对应的 UCRT64、MINGW64 或 CLANG64 shell 中运行，使用该环境的原生 Python。
 
 `ci/check_build.py` 按库构建与测试 → 安装 → `find_package` 消费者 → `add_subdirectory` 父项目的顺序检查。所有程序都由 CTest 按目标位置执行，安装后的动态库搜索路径在消费者的 CMake 中设置。检查会核对库测试是否注册，以及完整检查中父项目是否保留了独立构建的全部库测试；没有测试也会失败。
 
