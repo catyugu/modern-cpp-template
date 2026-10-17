@@ -26,11 +26,6 @@ else()
     set(MYPROJECT_VERSION_COMPATIBILITY SameMajorVersion)
 endif()
 
-set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS OFF)
-set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
-
 # 构建策略属于构建的所有者：作为子项目时由父项目决定构建类型、并行度等
 if(PROJECT_IS_TOP_LEVEL)
     set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -47,12 +42,6 @@ if(PROJECT_IS_TOP_LEVEL)
         message(STATUS "Multi-config generator: ${CMAKE_CONFIGURATION_TYPES}")
     endif()
 
-    # Automatically detect CPU core number.
-    cmake_host_system_information(RESULT CPU_NUMS QUERY NUMBER_OF_LOGICAL_CORES)
-    message(STATUS "CPU NUMS on current device is:${CPU_NUMS}")
-    math(EXPR JOBS "${CPU_NUMS} + ${CPU_NUMS} / 2")
-    set(CMAKE_BUILD_PARALLEL_LEVEL ${JOBS} CACHE STRING "parallel compiling thread num")
-    message(STATUS "Compiler default work jobs: ${CMAKE_BUILD_PARALLEL_LEVEL}")
 endif()
 
 # 独立构建默认全开；作为子项目时默认只构建库目标
@@ -60,7 +49,7 @@ option(MYPROJECT_BUILD_EXAMPLES "build examples" ${PROJECT_IS_TOP_LEVEL})
 option(MYPROJECT_BUILD_TESTS "build tests" ${PROJECT_IS_TOP_LEVEL})
 option(MYPROJECT_BUILD_TOOLS "build tools" ${PROJECT_IS_TOP_LEVEL})
 option(MYPROJECT_WERROR "treat warnings in this project as errors" ${PROJECT_IS_TOP_LEVEL})
-option(MYPROJECT_INSTALL "generate the install target" ON)
+option(MYPROJECT_INSTALL "install library and CMake package" ${PROJECT_IS_TOP_LEVEL})
 
 # 安装布局变量（CMAKE_INSTALL_LIBDIR 等）必须在第一次使用 ${CMAKE_INSTALL_*} 之前 include：
 # 变量在命令执行时展开，否则 $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}> 只在某个依赖
@@ -73,27 +62,31 @@ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/cmake/config.h.in ${PROJECT_BINARY_DI
 include(cmake/myprojectOptions.cmake)
 include(cmake/Dependencies.cmake)
 
-# library target: implementation in src/ (with its private headers), public headers under include/<project>/
-file(GLOB_RECURSE MYPROJECT_SOURCES CONFIGURE_DEPENDS "${PROJECT_SOURCE_DIR}/src/*.cpp" "${PROJECT_SOURCE_DIR}/src/*.cc" "${PROJECT_SOURCE_DIR}/src/*.c")
-file(GLOB_RECURSE MYPROJECT_HEADERS CONFIGURE_DEPENDS "${PROJECT_SOURCE_DIR}/include/*.h" "${PROJECT_SOURCE_DIR}/include/*.hpp")
-file(GLOB_RECURSE MYPROJECT_PRIVATE_HEADERS CONFIGURE_DEPENDS "${PROJECT_SOURCE_DIR}/src/*.h" "${PROJECT_SOURCE_DIR}/src/*.hpp")
-
-# 库目标 = 自己的源码（依赖经 MYPROJECT_DEPENDENCIES 链接，见 cmake/Dependencies.cmake）
-add_library(myproject ${MYPROJECT_SOURCES} ${MYPROJECT_HEADERS} ${MYPROJECT_PRIVATE_HEADERS})
+# Explicit sources are reviewed and compiled; FILE_SET HEADERS owns their
+# include paths and the install/export layout, including generated config.h.
+add_library(myproject)
 add_library(myproject::myproject ALIAS myproject)
 
-target_include_directories(myproject PUBLIC
-    $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
-    $<BUILD_INTERFACE:${PROJECT_BINARY_DIR}/include>
-    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+target_sources(myproject
     PRIVATE
-    ${PROJECT_SOURCE_DIR}/src
+        src/core.cpp
+        src/cli.cpp
+        src/options.hpp
+    PUBLIC
+        FILE_SET HEADERS
+        BASE_DIRS
+            "${PROJECT_SOURCE_DIR}/include"
+            "${PROJECT_BINARY_DIR}/include"
+        FILES
+            "${PROJECT_SOURCE_DIR}/include/myproject/core.hpp"
+            "${PROJECT_SOURCE_DIR}/include/myproject/cli.hpp"
+            "${PROJECT_SOURCE_DIR}/include/myproject/export.hpp"
+            "${PROJECT_BINARY_DIR}/include/myproject/config.h"
 )
-
-# 编译选项只用于本仓库自己的构建；依赖要进导出目标，因此不包在 BUILD_INTERFACE 里
+target_include_directories(myproject PRIVATE "${PROJECT_SOURCE_DIR}/src")
 target_link_libraries(myproject PRIVATE
     $<BUILD_INTERFACE:myproject_options>
-    ${MYPROJECT_DEPENDENCIES}
+    ${MYPROJECT_PRIVATE_LIBRARIES}
 )
 
 # C++20 是 myproject 向使用方发布的唯一要求
@@ -106,6 +99,7 @@ target_compile_features(myproject PUBLIC cxx_std_20)
 set_target_properties(myproject PROPERTIES
     POSITION_INDEPENDENT_CODE ON
     CXX_VISIBILITY_PRESET hidden
+    CXX_EXTENSIONS OFF
     VISIBILITY_INLINES_HIDDEN ON
     DEBUG_POSTFIX "d"
     VERSION ${MYPROJECT_VERSION}
@@ -129,21 +123,11 @@ function(myproject_stage_runtime target)
 endfunction()
 
 if(MYPROJECT_INSTALL)
-    install(TARGETS myproject ${MYPROJECT_DEPENDENCIES} EXPORT myprojectTargets
+    install(TARGETS myproject EXPORT myprojectTargets
         ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
         LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
         RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-    )
-
-    # 公共头文件，按 include/<project>/ 的布局安装。FILES_MATCHING：只装头文件，
-    install(DIRECTORY "${PROJECT_SOURCE_DIR}/include/"
-        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-        FILES_MATCHING
-        PATTERN "*.h"
-        PATTERN "*.hpp"
-    )
-    install(FILES "${PROJECT_BINARY_DIR}/include/myproject/config.h"
-        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/myproject
+        FILE_SET HEADERS DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
     )
 
     # 许可证随安装产物分发；CMAKE_INSTALL_DOCDIR 由 GNUInstallDirs 按项目名给出
