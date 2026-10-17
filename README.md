@@ -1,6 +1,6 @@
 # Modern C++ Template (MyProject)
 
-一个基于 CMake 的现代 C++ 项目模板，使用 C++20 和 CPM 管理第三方依赖（示例包含 `fmt` 与 `googletest`）。库目标的源码位于 `src/`、公共头位于 `include/myproject/`，配有单元测试 `tests/`、示例 `examples/` 与独立工具 `tools/`。安装产物自包含：`find_package(myproject)` 的消费者不需要预先安装任何第三方依赖。
+一个基于 CMake 的现代 C++ 项目模板，使用 C++20 和 CPM 管理第三方依赖（示例包含 `fmt` 与 `googletest`）。库目标的源码位于 `src/`、公共头位于 `include/myproject/`，配有单元测试 `tests/`、示例 `examples/` 与独立工具 `tools/`。安装包通过标准的 `find_dependency` 声明外部依赖；独立构建可以同时安装 CPM 下载的 fmt，使用系统 fmt 时由消费者自行提供。
 
 ## 特性
 
@@ -8,7 +8,7 @@
 - **现代 CMake**：顶层 `CMakeLists.txt` 定义库目标，`cmake/myprojectOptions.cmake` 提供跨编译器/配置的编译选项。
 - **中央化依赖**：依赖只在 `cmake/Dependencies.cmake` 里出现，其余文件只引用变量 `MYPROJECT_DEPENDENCIES`。
 - **可测性**：内置 GoogleTest 示例与 CTest 集成。
-- **可配置构建项**：`MYPROJECT_BUILD_EXAMPLES` / `MYPROJECT_BUILD_TESTS` / `MYPROJECT_BUILD_TOOLS` 分别开关示例、测试与工具，作为子项目嵌入时默认关闭。`MYPROJECT_INSTALL` 顶层默认开启、嵌入时默认关闭（父项目导出链接了本库的 target 时，本库必须提供 export set），父项目可显式关闭；开启时父项目自己的 `cmake --install` 会连本库一起装进父项目的 prefix，见「作为子项目嵌入」。
+- **可配置构建项**：`MYPROJECT_BUILD_EXAMPLES` / `MYPROJECT_BUILD_TESTS` / `MYPROJECT_BUILD_TOOLS` 分别开关示例、测试与工具，作为子项目嵌入时默认关闭。`MYPROJECT_INSTALL` 顶层默认开启，嵌入时默认关闭，父项目可显式覆盖；开启时开启安装后父项目自己的 `cmake --install` 会连本库一起装进父项目的 prefix，见「作为子项目嵌入」。
 - **编译选项集中管理**：警告集与 `MYPROJECT_WERROR` 在 `cmake/myprojectOptions.cmake`，只作用于本仓库自己的代码；优化级别与调试信息交给 `CMAKE_BUILD_TYPE`，见「编译选项」。
 - **代码格式**：`.clang-format` + `python ci/check_format.py`，见「代码格式」。
 
@@ -83,7 +83,7 @@ cmake --build . --target test
 
 ## 依赖
 
-依赖都在 `cmake/Dependencies.cmake` 里用 CPM 获取（含依赖自身的编译），并按是否需要随安装产物分发分成两类：
+依赖都在 `cmake/Dependencies.cmake` 里用 CPM 获取（含依赖自身的编译），，按实现依赖和测试依赖分为两类：
 
 - **实现层依赖**：fmt 优先复用父项目提供的 target，再尝试系统 `find_package(fmt 12 CONFIG)`，最后通过 CPM 获取。它通过 `fmt::fmt` 链接到库。
 - **测试依赖**：GoogleTest 只在测试启用时获取，不进入安装包的公开接口。
@@ -141,7 +141,7 @@ myproject_stage_runtime(myapp) # 把 myproject 与依赖的 DLL 拷到 myapp 旁
 - 父项目应先声明自己的依赖版本：CPM 在整棵构建树里是全局单例，同名依赖以第一次 `CPMAddPackage` 为准。
 - `MYPROJECT_INSTALL` 顶层默认开启、嵌入时默认关闭，父项目**不需要**为此做任何事；但要清楚它的后果：父项目自己执行 `cmake --install` 时，会把本库的头文件、库文件与包文件（以及本库依赖的库文件）一并装进父项目的安装 prefix，`-DMYPROJECT_INSTALL=OFF` 可关掉。
 - 共享构建时本库不部署 DLL，见上一节：父项目需要对链接了本库的可执行文件自行拷贝 `$<TARGET_RUNTIME_DLLS:>` 或把本库的构建目录加入运行时搜索路径。
-- 本库不需要父项目提供任何第三方依赖。
+- 本库会优先复用父项目提供的 fmt，必要时查找已安装的 fmt，最后通过 CPM 下载。
 
 ## 持续集成
 
