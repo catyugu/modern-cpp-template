@@ -47,7 +47,7 @@ def check_linkage(args, workspace, linkage, warning_flag):
             command += ["-G", args.generator]
         if args.toolset:
             command += ["-T", args.toolset]
-        run(*command, f"-DCMAKE_BUILD_TYPE={args.config}", *options)
+        run(*command, f"-DCMAKE_BUILD_TYPE={args.config}", *args.cmake_flag, *options)
 
     def build(directory):
         run("cmake", "--build", directory, "--config", args.config, "--parallel", args.jobs)
@@ -93,10 +93,13 @@ def main():
     parser.add_argument("--generator", help="CMake generator; defaults to the platform's generator")
     parser.add_argument("--toolset", help="Visual Studio toolset, e.g. ClangCL")
     parser.add_argument("--jobs", type=int, default=2, help="Maximum parallel build jobs (default: 2)")
+    parser.add_argument("--cmake-flag", action="append", default=[], help="Forward an extra -D setting")
     parser.add_argument("--build-root", type=Path, default=REPO / "_ci")
     args = parser.parse_args()
     if args.jobs < 1:
         parser.error("--jobs must be positive")
+    if any(not flag.startswith("-D") for flag in args.cmake_flag):
+        parser.error("--cmake-flag must be a -D setting")
 
     version = run("cmake", "--version", capture=True)
     match = re.search(r"cmake version (\d+)\.(\d+)\.(\d+)", version)

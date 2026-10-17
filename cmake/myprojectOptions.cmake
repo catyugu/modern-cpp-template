@@ -16,7 +16,8 @@ endif()
 # 所有者。fmt、spdlog、googletest、abseil、nlohmann/json 同样不设这些。
 target_compile_options(myproject_options INTERFACE
     # Valid for both C and C++ when using GCC/Clang command-line syntax.
-    $<${_MYPROJECT_GNU_FRONTEND}:-Wall;-Wextra;-Wpedantic>
+    $<$<COMPILE_LANG_AND_ID:C,GNU,Clang,AppleClang>:-Wall;-Wextra;-Wpedantic>
+    $<$<COMPILE_LANG_AND_ID:CXX,GNU,Clang,AppleClang>:-Wall;-Wextra;-Wpedantic>
 )
 
 target_compile_options(myproject_options INTERFACE
