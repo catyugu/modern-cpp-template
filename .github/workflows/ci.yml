@@ -84,7 +84,7 @@ jobs:
             toolset: ''
           - name: Windows MSVC / Debug / Visual Studio
             id: windows-msvc-vs-debug
-            runner: windows-2025
+            runner: windows-2022
             cc: cl
             cxx: cl
             generator: Visual Studio 17 2022
@@ -111,7 +111,7 @@ jobs:
             toolset: ''
           - name: Windows clang-cl / Release / Visual Studio
             id: windows-clangcl-vs-release
-            runner: windows-2025
+            runner: windows-2022
             cc: clang-cl
             cxx: clang-cl
             generator: Visual Studio 17 2022
