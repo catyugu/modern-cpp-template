@@ -145,7 +145,7 @@ myproject_stage_runtime(myapp) # 把 myproject 与依赖的 DLL 拷到 myapp 旁
 
 ## 持续集成
 
-`.github/workflows/ci.yml` 在推送 `main` 或 `agent/dev`、提交 PR 或手动触发时运行，分为格式检查、原生工具链检查和 MSYS2 工具链检查。原生侧覆盖 Ubuntu 24.04/GCC、macOS 15/AppleClang 与 Windows 2025 的 MSVC、clang-cl，MSYS2 侧覆盖 UCRT64/MINGW64 的 GCC 与 CLANG64 的 Clang；Debug/Release、静态/共享各跑一遍。全部使用 Ninja，并行度限制为 2 个进程；同一分支的新提交会取消尚未结束的旧检查。
+`.github/workflows/ci.yml` 在推送 `main` 或 `agent/dev`、提交 PR 或手动触发时运行，共 14 个 job：格式、9 个原生工具链/生成器组合、2 个 MSYS2 组合、Sanitizer 与 1 个模板初始化端到端测试。原生侧覆盖 Ubuntu 24.04/GCC 与 Clang、macOS 15/AppleClang、Windows 2025/MSVC 与 clang-cl，并使用 Unix Makefiles、Ninja、Xcode 与 Visual Studio 生成器；MSYS2 保留 UCRT64/GCC、CLANG64/Clang。每个原生工具链组合仍同时验证静态与共享安装包及其下游消费者，但 Debug/Release 不再对全部平台做笛卡尔积。`ci/test_template.py` 在临时目录中重命名模板，再验证新名字下的编译、测试、安装、消费者与父项目。并行度限制为 2；同一分支的新提交会取消尚未结束的旧检查。
 
 本地复现只需要 Python ≥ 3.10、CMake ≥ 3.26 和对应编译器，不依赖 Bash：
 
@@ -155,6 +155,7 @@ python ci/check_build.py --config Debug --generator Ninja
 python ci/check_build.py --linkage shared --scope library
 python ci/check_build.py --toolset ClangCL  # Windows / Visual Studio LLVM
 python ci/check_format.py                   # 另需 clang-format==23.1.1
+python ci/test_template.py                 # 全新项目初始化 + 端到端消费
 ```
 
 编译器用标准的 `CC`、`CXX` 选择：Windows 下先进入 Visual Studio 开发者终端再选 `cl` 或 `clang-cl`，MSYS2 下在对应的 UCRT64/MINGW64/CLANG64 shell 中运行。`ci/check_build.py` 依次检查库构建与测试、安装、普通 `find_package` 消费方、预先提供 `fmt::fmt` 的消费方，以及 `add_subdirectory` 父项目；静态库消费测试还核验必要的传递链接依赖，所有程序均由 CTest 执行。每次运行在 `_ci/` 下建立独立的构建与安装目录（切换工具链或配置无需清缓存，成功失败都保留便于排查，可用 `--build-root`、`--jobs`、`--scope` 调整），只有依赖缓存 `.cache/cpm/` 在运行间共享；CI 失败时上传 CMake 与 CTest 日志。
