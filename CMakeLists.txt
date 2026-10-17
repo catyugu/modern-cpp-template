@@ -16,6 +16,16 @@ set(MYPROJECT_VERSION_MINOR 1)
 set(MYPROJECT_VERSION_PATCH 0)
 set(MYPROJECT_VERSION "${MYPROJECT_VERSION_MAJOR}.${MYPROJECT_VERSION_MINOR}.${MYPROJECT_VERSION_PATCH}")
 
+# Pre-1.0 minor releases may break ABI; after 1.0 the major is the ABI boundary.
+# Keep the ELF/Mach-O SONAME and find_package version policy consistent.
+if(MYPROJECT_VERSION_MAJOR EQUAL 0)
+    set(MYPROJECT_ABI_VERSION "${MYPROJECT_VERSION_MAJOR}.${MYPROJECT_VERSION_MINOR}")
+    set(MYPROJECT_VERSION_COMPATIBILITY SameMinorVersion)
+else()
+    set(MYPROJECT_ABI_VERSION "${MYPROJECT_VERSION_MAJOR}")
+    set(MYPROJECT_VERSION_COMPATIBILITY SameMajorVersion)
+endif()
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -89,8 +99,8 @@ target_link_libraries(myproject PRIVATE
 # C++20 是 myproject 向使用方发布的唯一要求
 target_compile_features(myproject PUBLIC cxx_std_20)
 
-# VERSION/SOVERSION 只对共享库有意义：ELF 上生成 libmyproject.so.0.1.0 与 .so.0 符号链接（SONAME），
-# 静态库忽略它们；Windows 的 DLL 名不受影响。SOVERSION 取主版本号，即 ABI 兼容的承诺范围。
+# VERSION/SOVERSION apply to shared libraries only. Before 1.0, the minor
+# version is the ABI boundary; using just SOVERSION=0 would be incorrect.
 # 可见性属性让共享库默认隐藏符号：ELF/Mach-O 的默认是全部导出（连内部实现一起进动态符号表），
 # 因此公开接口上的每个类型/函数都必须带 MYPROJECT_API（见 include/myproject/export.hpp）
 set_target_properties(myproject PROPERTIES
@@ -99,7 +109,7 @@ set_target_properties(myproject PROPERTIES
     VISIBILITY_INLINES_HIDDEN ON
     DEBUG_POSTFIX "d"
     VERSION ${MYPROJECT_VERSION}
-    SOVERSION ${MYPROJECT_VERSION_MAJOR}
+    SOVERSION ${MYPROJECT_ABI_VERSION}
 )
 
 if(BUILD_SHARED_LIBS)
@@ -154,12 +164,11 @@ if(MYPROJECT_INSTALL)
         "${PROJECT_BINARY_DIR}/myprojectConfig.cmake"
         INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/myproject
     )
-    # 0.x 阶段的破坏性变更发生在 minor 位上：SameMajorVersion 会把 0.2.0 当成与 0.1 兼容。
-    # 发布 1.0 之后破坏性变更回到 major 位，这里应改成 SameMajorVersion
+    # Apply the same compatibility boundary used by SOVERSION.
     write_basic_package_version_file(
         "${PROJECT_BINARY_DIR}/myprojectConfigVersion.cmake"
         VERSION ${MYPROJECT_VERSION}
-        COMPATIBILITY SameMinorVersion
+        COMPATIBILITY ${MYPROJECT_VERSION_COMPATIBILITY}
     )
     install(FILES
         "${PROJECT_BINARY_DIR}/myprojectConfig.cmake"
