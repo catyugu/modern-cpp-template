@@ -6,9 +6,9 @@
 
 - **C++20**：项目启用 C++20 标准。
 - **现代 CMake**：顶层 `CMakeLists.txt` 定义库目标，`cmake/myprojectOptions.cmake` 提供跨编译器/配置的编译选项。
-- **中央化依赖**：依赖只在 `cmake/Dependencies.cmake` 里出现，其余文件只引用变量 `MYPROJECT_DEPENDENCIES`。
+- **中央化依赖**：依赖只在 `cmake/Dependencies.cmake` 里出现，其余文件链接 `MYPROJECT_PRIVATE_LIBRARIES` 提供的目标。
 - **可测性**：内置 GoogleTest 示例与 CTest 集成。
-- **可配置构建项**：`MYPROJECT_BUILD_EXAMPLES` / `MYPROJECT_BUILD_TESTS` / `MYPROJECT_BUILD_TOOLS` 分别开关示例、测试与工具，作为子项目嵌入时默认关闭。`MYPROJECT_INSTALL` 顶层默认开启，嵌入时默认关闭，父项目可显式覆盖；开启时开启安装后父项目自己的 `cmake --install` 会连本库一起装进父项目的 prefix，见「作为子项目嵌入」。
+- **可配置构建项**：`MYPROJECT_BUILD_EXAMPLES` / `MYPROJECT_BUILD_TESTS` / `MYPROJECT_BUILD_TOOLS` 分别开关示例、测试与工具，作为子项目嵌入时默认关闭。`MYPROJECT_INSTALL` 顶层默认开启，嵌入时默认关闭，父项目可显式覆盖；显式开启后，父项目自己的 `cmake --install` 会连本库一起装进父项目的 prefix，见「作为子项目嵌入」。
 - **编译选项集中管理**：警告集与 `MYPROJECT_WERROR` 在 `cmake/myprojectOptions.cmake`，只作用于本仓库自己的代码；优化级别与调试信息交给 `CMAKE_BUILD_TYPE`，见「编译选项」。
 - **代码格式**：`.clang-format` + `python ci/check_format.py`，见「代码格式」。
 
@@ -72,7 +72,7 @@ cmake --build . --target test
 
 - `CMakeLists.txt`：顶层 CMake 配置（选项、构建类型、库目标 `myproject` 与子目录）
 - `cmake/myprojectOptions.cmake`：跨编译器与配置的编译/链接选项（只作用于本仓库自己的目标）
-- `cmake/Dependencies.cmake`：先复用已安装依赖，再通过 CPM 回退，提供 `MYPROJECT_PRIVATE_LIBRARIES`
+- `cmake/Dependencies.cmake`：统一声明第三方依赖，通过 `CPMFindPackage` 查找已安装包或下载源码，提供 `MYPROJECT_PRIVATE_LIBRARIES`
 - `cmake/myprojectConfig.cmake.in`：安装后供 `find_package(myproject)` 使用的包配置模板
 - `.clang-format` / `.gitattributes`：格式约定与行尾约定（索引一律 LF，`*.sh` 检出也是 LF）
 - `include/myproject/`：公共头文件（随安装导出）
@@ -83,9 +83,9 @@ cmake --build . --target test
 
 ## 依赖
 
-依赖都在 `cmake/Dependencies.cmake` 里用 CPM 获取（含依赖自身的编译），，按实现依赖和测试依赖分为两类：
+依赖统一声明在 `cmake/Dependencies.cmake`；`CPMFindPackage` 优先查找已安装的 CMake 包，找不到则从固定版本的源码构建：
 
-- **实现层依赖**：fmt 优先复用父项目提供的 target，再尝试系统 `find_package(fmt 12 CONFIG)`，最后通过 CPM 获取。它通过 `fmt::fmt` 链接到库。
+- **实现层依赖**：如果父项目已提供 `fmt::fmt`，直接复用；否则通过一次 `CPMFindPackage(fmt)` 完成查找或下载，并链接 `fmt::fmt`。
 - **测试依赖**：GoogleTest 只在测试启用时获取，不进入安装包的公开接口。
 
 本库的 CMake package 使用 `find_dependency(fmt 12 CONFIG)`。如果 fmt 来自 CPM，它使用自身的安装规则安装其库、头文件及 CMake package；如果来自系统包，消费者也需要由自己的包管理器提供兼容的 fmt。不要直接修改或导出第三方 target。
@@ -112,7 +112,7 @@ cmake --build . --target test
 ## 版本与 ABI
 
 - 版本定义在顶层 `CMakeLists.txt` 的 `MYPROJECT_VERSION_{MAJOR,MINOR,PATCH}`，不用 `project(VERSION)`：后者会把 `CMAKE_PROJECT_VERSION*` 写进 cache，父项目若自己不声明版本，就会在自己的作用域里读到本库的版本。
-- 安装包按 `0.x 阶段采用 `SameMinorVersion`，从 1.0 开始采用 `SameMajorVersion`；共享库的 SOVERSION 按相同 ABI 兼容边界改变（`write_basic_package_version_file` 的调用在顶层 `CMakeLists.txt`）。
+- 0.x 阶段采用 `SameMinorVersion`，从 1.0 开始采用 `SameMajorVersion`；共享库的 `SOVERSION` 依相同 ABI 兼容边界变化。
 - 共享库默认隐藏符号（目标属性 `CXX_VISIBILITY_PRESET hidden`）：公开头文件里新增的每个类型/函数都必须带 `MYPROJECT_API`，否则消费者链接时找不到它（异常类尤其要注意，隐藏后跨 DSO 按类型捕获会失效）。
 - Debug 构建的库文件名带 `d` 后缀（`myprojectd.dll`、`libmyprojectd.so`），Debug 与 Release 因此可以装进同一个 prefix。
 - 公开头文件必须保持纯 ASCII（注释写英文）：MSVC 默认按系统代码页解析源文件，而消费者不会继承本仓库的 `/utf-8`，头文件里出现非 ASCII 字节会让使用方的编译直接失败。
@@ -139,13 +139,13 @@ myproject_stage_runtime(myapp) # 把 myproject 与依赖的 DLL 拷到 myapp 旁
 - 在 `add_subdirectory` **之前** `enable_testing()`（或 `include(CTest)`），否则 `-DMYPROJECT_BUILD_TESTS=ON` 构建出的测试不会出现在父项目的 `ctest -N` 里。
 - 父项目若需要 GTest，请提供 `GTest::gtest_main`（本库会复用）；本库自己拉取时固定 `BUILD_GMOCK OFF`。
 - 父项目应先声明自己的依赖版本：CPM 在整棵构建树里是全局单例，同名依赖以第一次 `CPMAddPackage` 为准。
-- `MYPROJECT_INSTALL` 顶层默认开启、嵌入时默认关闭，父项目**不需要**为此做任何事；但要清楚它的后果：父项目自己执行 `cmake --install` 时，会把本库的头文件、库文件与包文件（以及本库依赖的库文件）一并装进父项目的安装 prefix，`-DMYPROJECT_INSTALL=OFF` 可关掉。
+- `MYPROJECT_INSTALL` 作为子项目时默认关闭。如果父项目显式开启，本库的库文件、头文件和 CMake 包文件也会随父项目的 `cmake --install` 安装；通过 CPM 获取的 fmt 使用其自身的安装规则。
 - 共享构建时本库不部署 DLL，见上一节：父项目需要对链接了本库的可执行文件自行拷贝 `$<TARGET_RUNTIME_DLLS:>` 或把本库的构建目录加入运行时搜索路径。
 - 本库会优先复用父项目提供的 fmt，必要时查找已安装的 fmt，最后通过 CPM 下载。
 
 ## 持续集成
 
-`.github/workflows/ci.yml` 在推送 `main`、提交 PR 或手动触发时运行，分为格式检查、原生工具链检查和 MSYS2 工具链检查。原生侧覆盖 Ubuntu 24.04/GCC、macOS 15/AppleClang 与 Windows 2025 的 MSVC、clang-cl，MSYS2 侧覆盖 UCRT64/MINGW64 的 GCC 与 CLANG64 的 Clang；Debug/Release、静态/共享各跑一遍。全部使用 Ninja，并行度限制为 2 个进程；同一分支的新提交会取消尚未结束的旧检查。
+`.github/workflows/ci.yml` 在推送 `main` 或 `agent/dev`、提交 PR 或手动触发时运行，分为格式检查、原生工具链检查和 MSYS2 工具链检查。原生侧覆盖 Ubuntu 24.04/GCC、macOS 15/AppleClang 与 Windows 2025 的 MSVC、clang-cl，MSYS2 侧覆盖 UCRT64/MINGW64 的 GCC 与 CLANG64 的 Clang；Debug/Release、静态/共享各跑一遍。全部使用 Ninja，并行度限制为 2 个进程；同一分支的新提交会取消尚未结束的旧检查。
 
 本地复现只需要 Python ≥ 3.10、CMake ≥ 3.26 和对应编译器，不依赖 Bash：
 
@@ -169,4 +169,6 @@ python ci/check_format.py                   # 另需 clang-format==23.1.1
 
 ## 构建约定
 
-C++20 通过目标级 `target_compile_features` 声明，不覆盖父项目的全局标准。公共头文件通过 `FILE_SET HEADERS` 管理和安装，新公共头需要添加到文件集中。构建并行度由构建工具或 `cmake --build --parallel` 决定。CI 在现有工具链之外增测 Linux Clang 和最新版 CMake 下的 ASan/UBSan。
+模板显式设置 `CMAKE_CXX_STANDARD=20`、`CMAKE_CXX_STANDARD_REQUIRED=ON`、`CMAKE_CXX_EXTENSIONS=OFF` 与 `CMAKE_CXX_SCAN_FOR_MODULES=OFF`。这些是当前目录及其子目录的构建默认值，不会覆盖父项目的配置。库目标还通过 `target_compile_features(PUBLIC cxx_std_20)` 向消费者声明最低语言要求。使用模板的项目可以根据实际需求自行调整这些约定。
+
+`file(GLOB_RECURSE CONFIGURE_DEPENDS)` 自动发现新增源文件和公共头文件，安装时仅复制 `.h` / `.hpp` 公共头，生成的 `config.h` 单独安装。构建并行度由生成器或 `cmake --build --parallel` 控制。CI 增测 Linux Clang、新版 CMake 与 ASan/UBSan。

@@ -26,6 +26,13 @@ else()
     set(MYPROJECT_VERSION_COMPATIBILITY SameMajorVersion)
 endif()
 
+# An intentionally explicit C++20 baseline for this project template.
+# These directory-scoped defaults do not overwrite a parent's own settings.
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
+
 # 构建策略属于构建的所有者：作为子项目时由父项目决定构建类型、并行度等
 if(PROJECT_IS_TOP_LEVEL)
     set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -41,7 +48,6 @@ if(PROJECT_IS_TOP_LEVEL)
     else()
         message(STATUS "Multi-config generator: ${CMAKE_CONFIGURATION_TYPES}")
     endif()
-
 endif()
 
 # 独立构建默认全开；作为子项目时默认只构建库目标
@@ -62,28 +68,31 @@ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/cmake/config.h.in ${PROJECT_BINARY_DI
 include(cmake/myprojectOptions.cmake)
 include(cmake/Dependencies.cmake)
 
-# Explicit sources are reviewed and compiled; FILE_SET HEADERS owns their
-# include paths and the install/export layout, including generated config.h.
-add_library(myproject)
+# Automatically discover new source and header files on reconfiguration.
+file(GLOB_RECURSE MYPROJECT_SOURCES CONFIGURE_DEPENDS
+    "${PROJECT_SOURCE_DIR}/src/*.cpp"
+    "${PROJECT_SOURCE_DIR}/src/*.cc"
+    "${PROJECT_SOURCE_DIR}/src/*.c"
+)
+file(GLOB_RECURSE MYPROJECT_HEADERS CONFIGURE_DEPENDS
+    "${PROJECT_SOURCE_DIR}/include/*.h"
+    "${PROJECT_SOURCE_DIR}/include/*.hpp"
+)
+file(GLOB_RECURSE MYPROJECT_PRIVATE_HEADERS CONFIGURE_DEPENDS
+    "${PROJECT_SOURCE_DIR}/src/*.h"
+    "${PROJECT_SOURCE_DIR}/src/*.hpp"
+)
+
+add_library(myproject ${MYPROJECT_SOURCES} ${MYPROJECT_HEADERS} ${MYPROJECT_PRIVATE_HEADERS})
 add_library(myproject::myproject ALIAS myproject)
 
-target_sources(myproject
+target_include_directories(myproject PUBLIC
+    $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
+    $<BUILD_INTERFACE:${PROJECT_BINARY_DIR}/include>
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
     PRIVATE
-        src/core.cpp
-        src/cli.cpp
-        src/options.hpp
-    PUBLIC
-        FILE_SET HEADERS
-        BASE_DIRS
-            "${PROJECT_SOURCE_DIR}/include"
-            "${PROJECT_BINARY_DIR}/include"
-        FILES
-            "${PROJECT_SOURCE_DIR}/include/myproject/core.hpp"
-            "${PROJECT_SOURCE_DIR}/include/myproject/cli.hpp"
-            "${PROJECT_SOURCE_DIR}/include/myproject/export.hpp"
-            "${PROJECT_BINARY_DIR}/include/myproject/config.h"
+    "${PROJECT_SOURCE_DIR}/src"
 )
-target_include_directories(myproject PRIVATE "${PROJECT_SOURCE_DIR}/src")
 target_link_libraries(myproject PRIVATE
     $<BUILD_INTERFACE:myproject_options>
     ${MYPROJECT_PRIVATE_LIBRARIES}
@@ -99,7 +108,6 @@ target_compile_features(myproject PUBLIC cxx_std_20)
 set_target_properties(myproject PROPERTIES
     POSITION_INDEPENDENT_CODE ON
     CXX_VISIBILITY_PRESET hidden
-    CXX_EXTENSIONS OFF
     VISIBILITY_INLINES_HIDDEN ON
     DEBUG_POSTFIX "d"
     VERSION ${MYPROJECT_VERSION}
@@ -127,7 +135,16 @@ if(MYPROJECT_INSTALL)
         ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
         LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
         RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-        FILE_SET HEADERS DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+    )
+
+    install(DIRECTORY "${PROJECT_SOURCE_DIR}/include/"
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+        FILES_MATCHING
+        PATTERN "*.h"
+        PATTERN "*.hpp"
+    )
+    install(FILES "${PROJECT_BINARY_DIR}/include/myproject/config.h"
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/myproject
     )
 
     # 许可证随安装产物分发；CMAKE_INSTALL_DOCDIR 由 GNUInstallDirs 按项目名给出

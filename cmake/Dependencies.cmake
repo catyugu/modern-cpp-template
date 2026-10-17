@@ -1,27 +1,23 @@
-# Resolve dependency targets; linking and package installation are separate.
-# Reuse parent targets, then installed packages, then download via CPM.
-# Do not mutate a dependency's target properties or export third-party targets.
-
-if(NOT TARGET fmt::fmt)
-    find_package(fmt 12 CONFIG QUIET)
+# Declare dependencies here; consumers of this file link the provided targets.
+# CPMFindPackage tries installed packages first and fetches a pinned fallback.
+set(CPM_DONT_UPDATE_MODULE_PATH ON)
+set(CPM_DONT_CREATE_PACKAGE_LOCK ON)
+if(NOT COMMAND CPMAddPackage)
+    include("${CMAKE_CURRENT_LIST_DIR}/CPM.cmake")
 endif()
 
-if(NOT TARGET fmt::fmt OR (MYPROJECT_BUILD_TESTS AND NOT TARGET GTest::gtest_main))
-    set(CPM_DONT_UPDATE_MODULE_PATH ON)
-    set(CPM_DONT_CREATE_PACKAGE_LOCK ON)
-    if(NOT COMMAND CPMAddPackage)
-        include("${CMAKE_CURRENT_LIST_DIR}/CPM.cmake")
-    endif()
-    if(PROJECT_IS_TOP_LEVEL AND NOT DEFINED CPM_SOURCE_CACHE)
-        set(CPM_SOURCE_CACHE "${PROJECT_SOURCE_DIR}/.cache/cpm" CACHE PATH "CPM download cache")
-    endif()
+if(PROJECT_IS_TOP_LEVEL AND NOT DEFINED CPM_SOURCE_CACHE)
+    set(CPM_SOURCE_CACHE "${PROJECT_SOURCE_DIR}/.cache/cpm"
+        CACHE PATH "CPM dependency source cache")
 endif()
 
+# Private library dependency: fmt installs its own package when fetched.
+# The exported myproject package uses find_dependency(fmt).
 if(NOT TARGET fmt::fmt)
-    # FMT_INSTALL creates fmt's own library, headers, and package config.
-    # For an embedded build with installation disabled, add no install rules.
-    CPMAddPackage(
+    CPMFindPackage(
         NAME fmt
+        VERSION 12
+        FIND_PACKAGE_ARGUMENTS CONFIG
         GITHUB_REPOSITORY fmtlib/fmt
         GIT_TAG 12.2.0
         OPTIONS
@@ -32,15 +28,9 @@ if(NOT TARGET fmt::fmt)
             "FMT_SYSTEM_HEADERS ON"
     )
 endif()
-
-if(NOT TARGET fmt::fmt)
-    message(FATAL_ERROR "fmt::fmt was not provided by the selected dependency source")
-endif()
-
-# Private compiled dependency; static consumers still need it at link time.
 set(MYPROJECT_PRIVATE_LIBRARIES fmt::fmt)
 
-# Test-only dependency: never exported by myproject.
+# Tests are optional and do not add a dependency to the installed package.
 if(MYPROJECT_BUILD_TESTS AND NOT TARGET GTest::gtest_main)
     CPMFindPackage(
         NAME GTest
