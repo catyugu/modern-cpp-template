@@ -71,6 +71,16 @@ def check_linkage(args, workspace, linkage, warning_flag):
         build(consumer)
         test(consumer, args.config, required={"consumer.smoke"})
 
+        # The consumer already owns fmt::fmt and forbids a second package
+        # lookup. Imported static targets must still retain fmt's link edge.
+        preprovided = root / "consumer-preprovided"
+        configure(
+            REPO / "ci" / "consumer", preprovided,
+            f"-DCMAKE_PREFIX_PATH={prefix}", "-DMYPROJECT_PREPROVIDE_FMT=ON",
+        )
+        build(preprovided)
+        test(preprovided, args.config, required={"consumer.smoke"})
+
     if args.scope in ("all", "embedded"):
         directory = root / "embedded"
         configure(

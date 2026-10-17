@@ -1,6 +1,6 @@
 # Modern C++ Template (MyProject)
 
-一个基于 CMake 的现代 C++ 项目模板，使用 C++20 和 CPM 管理第三方依赖（示例包含 `fmt` 与 `googletest`）。库目标的源码位于 `src/`、公共头位于 `include/myproject/`，配有单元测试 `tests/`、示例 `examples/` 与独立工具 `tools/`。安装包通过标准的 `find_dependency` 声明外部依赖；独立构建可以同时安装 CPM 下载的 fmt，使用系统 fmt 时由消费者自行提供。
+一个基于 CMake 的现代 C++ 项目模板，使用 C++20 和 CPM 管理第三方依赖（示例包含 `fmt` 与 `googletest`）。库目标的源码位于 `src/`、公共头位于 `include/myproject/`，配有单元测试 `tests/`、示例 `examples/` 与独立工具 `tools/`。安装包复用消费方已有的 `fmt::fmt` target；若目标不存在，则通过标准的 `find_dependency` 查找外部依赖。独立构建可以同时安装 CPM 下载的 fmt，使用系统 fmt 时由消费者自行提供。
 
 ## 特性
 
@@ -85,10 +85,10 @@ cmake --build . --target test
 
 依赖统一声明在 `cmake/Dependencies.cmake`；`CPMFindPackage` 优先查找已安装的 CMake 包，找不到则从固定版本的源码构建：
 
-- **实现层依赖**：如果父项目已提供 `fmt::fmt`，直接复用；否则通过一次 `CPMFindPackage(fmt)` 完成查找或下载，并链接 `fmt::fmt`。
+- **实现层依赖**：如果父项目已提供 `fmt::fmt`，将该 target 视为父项目负责的依赖并直接复用；否则通过 `CPMFindPackage(fmt)` 查找兼容 fmt 12 的包或下载固定版本源码，并链接 `fmt::fmt`。已有 target 的实际版本由提供者负责，不再重复查找或校验。
 - **测试依赖**：GoogleTest 只在测试启用时获取，不进入安装包的公开接口。
 
-本库的 CMake package 使用 `find_dependency(fmt 12 CONFIG)`。如果 fmt 来自 CPM，它使用自身的安装规则安装其库、头文件及 CMake package；如果来自系统包，消费者也需要由自己的包管理器提供兼容的 fmt。不要直接修改或导出第三方 target。
+安装后的 CMake package 同样先检查 `fmt::fmt`，只有 target 不存在时才执行 `find_dependency(fmt 12 CONFIG)`。即使 fmt 是库的 `PRIVATE` 依赖，静态库的导出目标仍会通过 CMake 的 `$<LINK_ONLY:fmt::fmt>` 保留必要的链接依赖；不要手工删除或改写此接口。动态库保持相同的目标复用策略。CPM 下载的 fmt 通过自身安装规则提供库、头文件及 CMake package；若来自系统包，独立消费方须提供兼容版本的 fmt。不要直接修改或导出第三方 target。
 
 使用 `-DBUILD_SHARED_LIBS=ON` 可构建动态库；导出宏 `MYPROJECT_API` 由本库按静态/共享自动切换，运行时 DLL 的部署见下一节。
 
@@ -157,7 +157,7 @@ python ci/check_build.py --toolset ClangCL  # Windows / Visual Studio LLVM
 python ci/check_format.py                   # 另需 clang-format==23.1.1
 ```
 
-编译器用标准的 `CC`、`CXX` 选择：Windows 下先进入 Visual Studio 开发者终端再选 `cl` 或 `clang-cl`，MSYS2 下在对应的 UCRT64/MINGW64/CLANG64 shell 中运行。`ci/check_build.py` 依次检查库构建与测试、安装、`find_package` 消费者和 `add_subdirectory` 父项目，所有程序都由 CTest 执行。每次运行在 `_ci/` 下建立独立的构建与安装目录（切换工具链或配置无需清缓存，成功失败都保留便于排查，可用 `--build-root`、`--jobs`、`--scope` 调整），只有依赖缓存 `.cache/cpm/` 在运行间共享；CI 失败时上传 CMake 与 CTest 日志。
+编译器用标准的 `CC`、`CXX` 选择：Windows 下先进入 Visual Studio 开发者终端再选 `cl` 或 `clang-cl`，MSYS2 下在对应的 UCRT64/MINGW64/CLANG64 shell 中运行。`ci/check_build.py` 依次检查库构建与测试、安装、普通 `find_package` 消费方、预先提供 `fmt::fmt` 的消费方，以及 `add_subdirectory` 父项目；静态库消费测试还核验必要的传递链接依赖，所有程序均由 CTest 执行。每次运行在 `_ci/` 下建立独立的构建与安装目录（切换工具链或配置无需清缓存，成功失败都保留便于排查，可用 `--build-root`、`--jobs`、`--scope` 调整），只有依赖缓存 `.cache/cpm/` 在运行间共享；CI 失败时上传 CMake 与 CTest 日志。
 
 ## 贡献
 

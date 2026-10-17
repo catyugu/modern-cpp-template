@@ -11,12 +11,14 @@ if(PROJECT_IS_TOP_LEVEL AND NOT DEFINED CPM_SOURCE_CACHE)
         CACHE PATH "CPM dependency source cache")
 endif()
 
-# Private library dependency: fmt installs its own package when fetched.
-# The exported myproject package uses find_dependency(fmt).
+# A pre-existing fmt::fmt target is authoritative, whether provided by a
+# superproject, a package manager, or find_package(). In its absence, require
+# the same compatible fmt major version as the installed CMake package.
+set(MYPROJECT_FMT_FIND_VERSION 12)
 if(NOT TARGET fmt::fmt)
     CPMFindPackage(
         NAME fmt
-        VERSION 12
+        VERSION ${MYPROJECT_FMT_FIND_VERSION}
         FIND_PACKAGE_ARGUMENTS CONFIG
         GITHUB_REPOSITORY fmtlib/fmt
         GIT_TAG 12.2.0
