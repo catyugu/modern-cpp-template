@@ -6,6 +6,13 @@ project(myproject_consumer LANGUAGES CXX)
 
 find_package(myproject REQUIRED CONFIG)
 
+get_target_property(_includes myproject::myproject INTERFACE_INCLUDE_DIRECTORIES)
+foreach(_dir IN LISTS _includes)
+    if(NOT _dir MATCHES "^\\$<" AND NOT EXISTS "${_dir}")
+        message(FATAL_ERROR "Exported include directory does not exist: ${_dir}")
+    endif()
+endforeach()
+
 add_executable(consumer main.cpp)
 target_link_libraries(consumer PRIVATE myproject::myproject)
 

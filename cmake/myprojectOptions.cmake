@@ -15,23 +15,25 @@ endif()
 # -O3 -DNDEBUG，本库若再追加 -O2 反而把父项目/默认的优化级别降下来），而构建类型属于构建的
 # 所有者。fmt、spdlog、googletest、abseil、nlohmann/json 同样不设这些。
 target_compile_options(myproject_options INTERFACE
-    $<${_MYPROJECT_GNU_FRONTEND}:
-    -Wpedantic
-    >
+    # Valid for both C and C++ when using GCC/Clang command-line syntax.
+    $<${_MYPROJECT_GNU_FRONTEND}:-Wall>
+    $<${_MYPROJECT_GNU_FRONTEND}:-Wextra>
+    $<${_MYPROJECT_GNU_FRONTEND}:-Wpedantic>
 )
 
 target_compile_options(myproject_options INTERFACE
     $<${_MYPROJECT_MSVC_FRONTEND}:
     /W4
-    /permissive-
     /utf-8
-    /bigobj
-    /Zc:__cplusplus
+    # These flags only have C++ semantics.
+    $<$<COMPILE_LANGUAGE:CXX>:/permissive->
+    $<$<COMPILE_LANGUAGE:CXX>:/bigobj>
+    $<$<COMPILE_LANGUAGE:CXX>:/Zc:__cplusplus>
     # 只在 /W4 + /WX 下把正常代码变成错误的、对库代码没有可行动信号的两条：导出类继承/内嵌标准库
     # 类型是正常做法，MSVC 文档也说明可忽略，gtest（-wd4251 -wd4275）、re2、spdlog 同样关掉。
     # 4127、4189/4100、4702 等有意义的警告照常报错，配 /WX 时仍会中断构建（已实测）
-    /wd4251 # 'type' needs to have dll-interface to be used by clients of class
-    /wd4275 # non dll-interface class used as base for dll-interface class
+    $<$<COMPILE_LANGUAGE:CXX>:/wd4251> # exported STL member
+    $<$<COMPILE_LANGUAGE:CXX>:/wd4275> # exported base class
     >
 )
 

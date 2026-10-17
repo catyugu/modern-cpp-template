@@ -16,6 +16,18 @@ set(MYPROJECT_VERSION_MINOR 1)
 set(MYPROJECT_VERSION_PATCH 0)
 set(MYPROJECT_VERSION "${MYPROJECT_VERSION_MAJOR}.${MYPROJECT_VERSION_MINOR}.${MYPROJECT_VERSION_PATCH}")
 
+# Pre-1.0 minor releases may break ABI; after 1.0 the major is the ABI boundary.
+# Keep the ELF/Mach-O SONAME and find_package version policy consistent.
+if(MYPROJECT_VERSION_MAJOR EQUAL 0)
+    set(MYPROJECT_ABI_VERSION "${MYPROJECT_VERSION_MAJOR}.${MYPROJECT_VERSION_MINOR}")
+    set(MYPROJECT_VERSION_COMPATIBILITY SameMinorVersion)
+else()
+    set(MYPROJECT_ABI_VERSION "${MYPROJECT_VERSION_MAJOR}")
+    set(MYPROJECT_VERSION_COMPATIBILITY SameMajorVersion)
+endif()
+
+# An intentionally explicit C++20 baseline for this project template.
+# These directory-scoped defaults do not overwrite a parent's own settings.
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -36,13 +48,6 @@ if(PROJECT_IS_TOP_LEVEL)
     else()
         message(STATUS "Multi-config generator: ${CMAKE_CONFIGURATION_TYPES}")
     endif()
-
-    # Automatically detect CPU core number.
-    cmake_host_system_information(RESULT CPU_NUMS QUERY NUMBER_OF_LOGICAL_CORES)
-    message(STATUS "CPU NUMS on current device is:${CPU_NUMS}")
-    math(EXPR JOBS "${CPU_NUMS} + ${CPU_NUMS} / 2")
-    set(CMAKE_BUILD_PARALLEL_LEVEL ${JOBS} CACHE STRING "parallel compiling thread num")
-    message(STATUS "Compiler default work jobs: ${CMAKE_BUILD_PARALLEL_LEVEL}")
 endif()
 
 # 独立构建默认全开；作为子项目时默认只构建库目标
@@ -50,7 +55,7 @@ option(MYPROJECT_BUILD_EXAMPLES "build examples" ${PROJECT_IS_TOP_LEVEL})
 option(MYPROJECT_BUILD_TESTS "build tests" ${PROJECT_IS_TOP_LEVEL})
 option(MYPROJECT_BUILD_TOOLS "build tools" ${PROJECT_IS_TOP_LEVEL})
 option(MYPROJECT_WERROR "treat warnings in this project as errors" ${PROJECT_IS_TOP_LEVEL})
-option(MYPROJECT_INSTALL "generate the install target" ON)
+option(MYPROJECT_INSTALL "install library and CMake package" ${PROJECT_IS_TOP_LEVEL})
 
 # 安装布局变量（CMAKE_INSTALL_LIBDIR 等）必须在第一次使用 ${CMAKE_INSTALL_*} 之前 include：
 # 变量在命令执行时展开，否则 $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}> 只在某个依赖
@@ -63,12 +68,21 @@ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/cmake/config.h.in ${PROJECT_BINARY_DI
 include(cmake/myprojectOptions.cmake)
 include(cmake/Dependencies.cmake)
 
-# library target: implementation in src/ (with its private headers), public headers under include/<project>/
-file(GLOB_RECURSE MYPROJECT_SOURCES CONFIGURE_DEPENDS "${PROJECT_SOURCE_DIR}/src/*.cpp" "${PROJECT_SOURCE_DIR}/src/*.cc" "${PROJECT_SOURCE_DIR}/src/*.c")
-file(GLOB_RECURSE MYPROJECT_HEADERS CONFIGURE_DEPENDS "${PROJECT_SOURCE_DIR}/include/*.h" "${PROJECT_SOURCE_DIR}/include/*.hpp")
-file(GLOB_RECURSE MYPROJECT_PRIVATE_HEADERS CONFIGURE_DEPENDS "${PROJECT_SOURCE_DIR}/src/*.h" "${PROJECT_SOURCE_DIR}/src/*.hpp")
+# Automatically discover new source and header files on reconfiguration.
+file(GLOB_RECURSE MYPROJECT_SOURCES CONFIGURE_DEPENDS
+    "${PROJECT_SOURCE_DIR}/src/*.cpp"
+    "${PROJECT_SOURCE_DIR}/src/*.cc"
+    "${PROJECT_SOURCE_DIR}/src/*.c"
+)
+file(GLOB_RECURSE MYPROJECT_HEADERS CONFIGURE_DEPENDS
+    "${PROJECT_SOURCE_DIR}/include/*.h"
+    "${PROJECT_SOURCE_DIR}/include/*.hpp"
+)
+file(GLOB_RECURSE MYPROJECT_PRIVATE_HEADERS CONFIGURE_DEPENDS
+    "${PROJECT_SOURCE_DIR}/src/*.h"
+    "${PROJECT_SOURCE_DIR}/src/*.hpp"
+)
 
-# 库目标 = 自己的源码（依赖经 MYPROJECT_DEPENDENCIES 链接，见 cmake/Dependencies.cmake）
 add_library(myproject ${MYPROJECT_SOURCES} ${MYPROJECT_HEADERS} ${MYPROJECT_PRIVATE_HEADERS})
 add_library(myproject::myproject ALIAS myproject)
 
@@ -77,20 +91,18 @@ target_include_directories(myproject PUBLIC
     $<BUILD_INTERFACE:${PROJECT_BINARY_DIR}/include>
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
     PRIVATE
-    ${PROJECT_SOURCE_DIR}/src
+    "${PROJECT_SOURCE_DIR}/src"
 )
-
-# 编译选项只用于本仓库自己的构建；依赖要进导出目标，因此不包在 BUILD_INTERFACE 里
 target_link_libraries(myproject PRIVATE
     $<BUILD_INTERFACE:myproject_options>
-    ${MYPROJECT_DEPENDENCIES}
+    ${MYPROJECT_PRIVATE_LIBRARIES}
 )
 
 # C++20 是 myproject 向使用方发布的唯一要求
 target_compile_features(myproject PUBLIC cxx_std_20)
 
-# VERSION/SOVERSION 只对共享库有意义：ELF 上生成 libmyproject.so.0.1.0 与 .so.0 符号链接（SONAME），
-# 静态库忽略它们；Windows 的 DLL 名不受影响。SOVERSION 取主版本号，即 ABI 兼容的承诺范围。
+# VERSION/SOVERSION apply to shared libraries only. Before 1.0, the minor
+# version is the ABI boundary; using just SOVERSION=0 would be incorrect.
 # 可见性属性让共享库默认隐藏符号：ELF/Mach-O 的默认是全部导出（连内部实现一起进动态符号表），
 # 因此公开接口上的每个类型/函数都必须带 MYPROJECT_API（见 include/myproject/export.hpp）
 set_target_properties(myproject PROPERTIES
@@ -99,7 +111,7 @@ set_target_properties(myproject PROPERTIES
     VISIBILITY_INLINES_HIDDEN ON
     DEBUG_POSTFIX "d"
     VERSION ${MYPROJECT_VERSION}
-    SOVERSION ${MYPROJECT_VERSION_MAJOR}
+    SOVERSION ${MYPROJECT_ABI_VERSION}
 )
 
 if(BUILD_SHARED_LIBS)
@@ -119,13 +131,12 @@ function(myproject_stage_runtime target)
 endfunction()
 
 if(MYPROJECT_INSTALL)
-    install(TARGETS myproject ${MYPROJECT_DEPENDENCIES} EXPORT myprojectTargets
+    install(TARGETS myproject EXPORT myprojectTargets
         ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
         LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
         RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
     )
 
-    # 公共头文件，按 include/<project>/ 的布局安装。FILES_MATCHING：只装头文件，
     install(DIRECTORY "${PROJECT_SOURCE_DIR}/include/"
         DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
         FILES_MATCHING
@@ -154,12 +165,11 @@ if(MYPROJECT_INSTALL)
         "${PROJECT_BINARY_DIR}/myprojectConfig.cmake"
         INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/myproject
     )
-    # 0.x 阶段的破坏性变更发生在 minor 位上：SameMajorVersion 会把 0.2.0 当成与 0.1 兼容。
-    # 发布 1.0 之后破坏性变更回到 major 位，这里应改成 SameMajorVersion
+    # Apply the same compatibility boundary used by SOVERSION.
     write_basic_package_version_file(
         "${PROJECT_BINARY_DIR}/myprojectConfigVersion.cmake"
         VERSION ${MYPROJECT_VERSION}
-        COMPATIBILITY SameMinorVersion
+        COMPATIBILITY ${MYPROJECT_VERSION_COMPATIBILITY}
     )
     install(FILES
         "${PROJECT_BINARY_DIR}/myprojectConfig.cmake"

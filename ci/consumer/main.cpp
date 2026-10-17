@@ -3,6 +3,7 @@
 // library is built as a shared library.
 #include "myproject/cli.hpp"
 #include "myproject/config.h"
+#include "myproject/config.h" // A public header must be safe to include more than once.
 #include "myproject/core.hpp"
 
 #include <cstdio>

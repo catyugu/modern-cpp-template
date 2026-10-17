@@ -1,57 +1,44 @@
-# # Dependencies.cmake
-# 唯一的依赖声明处：顶层 CMakeLists.txt 与各子目录只引用变量 MYPROJECT_DEPENDENCIES，
-# 新增依赖只改本文件。
-
-# 作为子项目时这两项会写进父项目的构建根（find_package 重定向、CPM 的 lock 文件），
-# 本仓库的依赖只经 target 使用，不需要它们
+# Declare dependencies here; consumers of this file link the provided targets.
+# CPMFindPackage tries installed packages first and fetches a pinned fallback.
 set(CPM_DONT_UPDATE_MODULE_PATH ON)
 set(CPM_DONT_CREATE_PACKAGE_LOCK ON)
-
-# CPM 是全局单例：树里已经有一份（例如父项目自己 vendor 的）就直接复用它。
-# 再 include 一份自带副本是空操作，且自带副本更新时它会在版本比较处抛 AUTHOR_WARNING
-# （那段在 CPM_INITIALIZED 提前返回之前执行），父项目以 -Werror=dev 配置就会直接失败。
-# 树里还没有 CPM 时由本文件提供；两种情况下的 CPMAddPackage 都作用于同一份 CPM
 if(NOT COMMAND CPMAddPackage)
-  include("${CMAKE_CURRENT_LIST_DIR}/CPM.cmake")
+    include("${CMAKE_CURRENT_LIST_DIR}/CPM.cmake")
 endif()
 
-# 源码缓存只是独立构建时的便利，不该替父项目决定依赖下载位置
-if(PROJECT_IS_TOP_LEVEL)
-  set(CPM_SOURCE_CACHE "${PROJECT_SOURCE_DIR}/.cache/cpm" CACHE PATH "CPM cache to avoid repeated fetching")
+if(PROJECT_IS_TOP_LEVEL AND NOT DEFINED CPM_SOURCE_CACHE)
+    set(CPM_SOURCE_CACHE "${PROJECT_SOURCE_DIR}/.cache/cpm"
+        CACHE PATH "CPM dependency source cache")
 endif()
 
-# fmt：编译型依赖，由实现层（src/core.cpp、src/cli.cpp）使用；获取与构建都交给 CPM/fmt 自己。
-# FMT_MODULE OFF：不需要它额外构建一份 C++20 模块目标（这是 fmt 自己文档化的选项）
-# FMT_SYSTEM_HEADERS ON：把 fmt 的头文件作为 SYSTEM 包含目录，这样 MSVC 的 /WX
-# （MYPROJECT_WERROR 默认在顶层开启）只作用于本仓库自己的代码，依赖头文件里的警告不受影响
-CPMAddPackage(
-  NAME fmt
-  GITHUB_REPOSITORY fmtlib/fmt
-  GIT_TAG 12.2.0
-  OPTIONS
-  "FMT_MODULE OFF"
-  "FMT_SYSTEM_HEADERS ON"
-)
+# Private library dependency: fmt installs its own package when fetched.
+# The exported myproject package uses find_dependency(fmt).
+if(NOT TARGET fmt::fmt)
+    CPMFindPackage(
+        NAME fmt
+        VERSION 12
+        FIND_PACKAGE_ARGUMENTS CONFIG
+        GITHUB_REPOSITORY fmtlib/fmt
+        GIT_TAG 12.2.0
+        OPTIONS
+            "FMT_INSTALL ${MYPROJECT_INSTALL}"
+            "FMT_MODULE OFF"
+            "FMT_TEST OFF"
+            "FMT_DOC OFF"
+            "FMT_SYSTEM_HEADERS ON"
+    )
+endif()
+set(MYPROJECT_PRIVATE_LIBRARIES fmt::fmt)
 
-# 随 myproject 一起安装/导出的依赖目标：静态构建时导出目标会引用它（消费者链接需要它的库
-# 文件），共享构建时它的 DLL/so 也要一并安装。写真实目标名（别名不能 install）。
-# 它的头文件不装：公开头文件里没有第三方类型，消费者不需要。fmt 无条件给目标设了 PUBLIC_HEADER，
-# 而我们的 install(TARGETS) 不装依赖的头文件 —— 清空该属性，否则 CMake 会报 author warning，
-# 父项目若以 -Werror=dev 配置就会直接失败
-set(MYPROJECT_DEPENDENCIES fmt)
-set_target_properties(fmt PROPERTIES PUBLIC_HEADER "")
-
-# googletest：只有测试使用，不进 MYPROJECT_DEPENDENCIES，由 tests/ 直接链接；
-# 优先复用父项目或系统已提供的 GTest。固定为静态库，避免 BUILD_SHARED_LIBS 把 gtest
-# 变成需要额外分发的 DLL
+# Tests are optional and do not add a dependency to the installed package.
 if(MYPROJECT_BUILD_TESTS AND NOT TARGET GTest::gtest_main)
-  CPMFindPackage(
-    NAME GTest
-    GITHUB_REPOSITORY google/googletest
-    GIT_TAG "d72f9c8"
-    OPTIONS
-    "BUILD_GMOCK OFF"
-    "INSTALL_GTEST OFF"
-    "BUILD_SHARED_LIBS OFF"
-  )
+    CPMFindPackage(
+        NAME GTest
+        GITHUB_REPOSITORY google/googletest
+        GIT_TAG "d72f9c8"
+        OPTIONS
+            "BUILD_GMOCK OFF"
+            "INSTALL_GTEST OFF"
+            "BUILD_SHARED_LIBS OFF"
+    )
 endif()
