@@ -14,6 +14,8 @@ endif()
 # A pre-existing fmt::fmt target is authoritative, whether provided by a
 # superproject, a package manager, or find_package(). In its absence, require
 # the same compatible fmt major version as the installed CMake package.
+# NOTICE that by default, for external dependencies, you shall set "SYSTEM YES",
+# in order to avoid header file warning pollution.
 set(MYPROJECT_FMT_FIND_VERSION 12)
 if(NOT TARGET fmt::fmt)
     CPMFindPackage(
@@ -22,12 +24,13 @@ if(NOT TARGET fmt::fmt)
         FIND_PACKAGE_ARGUMENTS CONFIG
         GITHUB_REPOSITORY fmtlib/fmt
         GIT_TAG 12.2.0
+        SYSTEM YES
         OPTIONS
-            "FMT_INSTALL ${MYPROJECT_INSTALL}"
-            "FMT_MODULE OFF"
-            "FMT_TEST OFF"
-            "FMT_DOC OFF"
-            "FMT_SYSTEM_HEADERS ON"
+        "FMT_INSTALL ${MYPROJECT_INSTALL}"
+        "FMT_MODULE OFF"
+        "FMT_TEST OFF"
+        "FMT_DOC OFF"
+        "FMT_SYSTEM_HEADERS ON"
     )
 endif()
 set(MYPROJECT_PRIVATE_LIBRARIES fmt::fmt)
@@ -37,10 +40,11 @@ if(MYPROJECT_BUILD_TESTS AND NOT TARGET GTest::gtest_main)
     CPMFindPackage(
         NAME GTest
         GITHUB_REPOSITORY google/googletest
-        GIT_TAG "d72f9c8"
+        GIT_TAG "v1.18.0"
+        SYSTEM YES
         OPTIONS
-            "BUILD_GMOCK OFF"
-            "INSTALL_GTEST OFF"
-            "BUILD_SHARED_LIBS OFF"
+        "BUILD_GMOCK OFF"
+        "INSTALL_GTEST OFF"
+        "BUILD_SHARED_LIBS OFF"
     )
 endif()
