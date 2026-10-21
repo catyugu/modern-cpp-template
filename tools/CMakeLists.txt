@@ -1,11 +1,10 @@
-# 小型工具：myproject_wc —— 统计文件的行数/单词数/字节数（类似 Unix wc）
-# 自包含：不依赖内部库，也不使用任何第三方库
+add_executable(myproject_fit main.cpp)
+target_link_libraries(myproject_fit PRIVATE myproject::myproject myproject_options)
+myproject_stage_runtime(myproject_fit)
 
-add_executable(myproject_wc main.cpp)
-target_compile_features(myproject_wc PRIVATE cxx_std_20)
-
-# 源码里的注释含非 ASCII 字符，而 MSVC 默认按系统代码页解析源文件（本目标不链
-# myproject_options，拿不到那里的 /utf-8）
-if(MSVC)
-    target_compile_options(myproject_wc PRIVATE /utf-8)
+if(MYPROJECT_BUILD_TESTS)
+    add_test(NAME tool.fit_cli
+        COMMAND myproject_fit "${PROJECT_SOURCE_DIR}/examples/samples.txt")
+    set_tests_properties(tool.fit_cli PROPERTIES
+        PASS_REGULAR_EXPRESSION "RMSE = 0[.]41833")
 endif()

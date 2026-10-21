@@ -1,12 +1,12 @@
-// Parent executable that links the embedded library.
 #include "myproject/core.hpp"
-
-#include <cstdio>
-#include <string>
+#include <array>
+#include <cmath>
+#include <iostream>
 
 int main()
 {
-    const std::string greeting = myproject::get_greeting("superproject");
-    std::printf("%s\n", greeting.c_str());
-    return greeting.empty() ? 1 : 0;
+    const std::array<myproject::Sample, 3> samples {{{0, 1}, {1, 3}, {2, 5}}};
+    const auto fit = myproject::fit_line(samples);
+    std::cout << myproject::format_fit(fit) << '\n';
+    return std::abs(fit.predict(4) - 9.0) < 1e-12 ? 0 : 1;
 }

@@ -66,7 +66,6 @@ include(GNUInstallDirs)
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/cmake/config.h.in ${PROJECT_BINARY_DIR}/include/myproject/config.h)
 
 include(cmake/myprojectOptions.cmake)
-include(cmake/Dependencies.cmake)
 
 # Automatically discover new source and header files on reconfiguration.
 file(GLOB_RECURSE MYPROJECT_SOURCES CONFIGURE_DEPENDS
@@ -86,6 +85,8 @@ file(GLOB_RECURSE MYPROJECT_PRIVATE_HEADERS CONFIGURE_DEPENDS
 add_library(myproject ${MYPROJECT_SOURCES} ${MYPROJECT_HEADERS} ${MYPROJECT_PRIVATE_HEADERS})
 add_library(myproject::myproject ALIAS myproject)
 
+include(cmake/Dependencies.cmake)
+
 target_include_directories(myproject PUBLIC
     $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
     $<BUILD_INTERFACE:${PROJECT_BINARY_DIR}/include>
@@ -95,7 +96,6 @@ target_include_directories(myproject PUBLIC
 )
 target_link_libraries(myproject PRIVATE
     $<BUILD_INTERFACE:myproject_options>
-    fmt::fmt
 )
 
 # C++20 是 myproject 向使用方发布的唯一要求
@@ -153,15 +153,6 @@ if(MYPROJECT_INSTALL)
     )
 
     include(CMakePackageConfigHelpers)
-
-    # Only static exports retain this PRIVATE link dependency. Source-fetched
-    # fmt has its install rules enabled above; external fmt stays external.
-    get_target_property(_myproject_type myproject TYPE)
-    if(_myproject_type STREQUAL "STATIC_LIBRARY")
-        set(MYPROJECT_FIND_FMT ON)
-    else()
-        set(MYPROJECT_FIND_FMT OFF)
-    endif()
 
     install(EXPORT myprojectTargets
         FILE myprojectTargets.cmake

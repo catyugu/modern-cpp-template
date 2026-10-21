@@ -8,9 +8,10 @@ if(NOT COMMAND CPMAddPackage)
     include("${CMAKE_CURRENT_LIST_DIR}/CPM.cmake")
 endif()
 
-# Existing targets are authoritative: the parent owns their compatibility.
-# Otherwise let CPM try an installed package, then fetch the pinned fallback.
-# Use SYSTEM YES for third-party headers to keep our warning policy local.
+# Keep each dependency's acquisition, link scope, and installed requirement here.
+set(MYPROJECT_PACKAGE_DEPENDENCIES "")
+
+# fmt: PRIVATE implementation dependency; trust targets supplied by the parent.
 set(MYPROJECT_FMT_MIN_VERSION 12.2.0)
 if(NOT TARGET fmt::fmt)
     CPMFindPackage(
@@ -27,6 +28,40 @@ if(NOT TARGET fmt::fmt)
         "FMT_DOC OFF"
         "FMT_SYSTEM_HEADERS ON"
     )
+endif()
+target_link_libraries(myproject PRIVATE fmt::fmt)
+
+# PRIVATE dependencies remain in static exports; PUBLIC ones need this for both.
+if(NOT BUILD_SHARED_LIBS)
+    string(APPEND MYPROJECT_PACKAGE_DEPENDENCIES "
+if(NOT TARGET fmt::fmt)
+    find_dependency(fmt ${MYPROJECT_FMT_MIN_VERSION} CONFIG)
+endif()
+")
+endif()
+
+# Eigen: a header-only numerical dependency, kept out of the public API.
+set(MYPROJECT_EIGEN_MIN_VERSION 5.0.0)
+if(NOT TARGET Eigen3::Eigen)
+    CPMFindPackage(
+        NAME Eigen3
+        VERSION ${MYPROJECT_EIGEN_MIN_VERSION}
+        FIND_PACKAGE_ARGUMENTS CONFIG
+        GIT_REPOSITORY https://gitlab.com/libeigen/eigen.git
+        GIT_TAG ${MYPROJECT_EIGEN_MIN_VERSION}
+        SYSTEM YES
+        OPTIONS
+        "EIGEN_BUILD_TESTING OFF"
+        "EIGEN_BUILD_CMAKE_PACKAGE ${MYPROJECT_INSTALL}"
+    )
+endif()
+target_link_libraries(myproject PRIVATE Eigen3::Eigen)
+if(NOT BUILD_SHARED_LIBS)
+    string(APPEND MYPROJECT_PACKAGE_DEPENDENCIES "
+if(NOT TARGET Eigen3::Eigen)
+    find_dependency(Eigen3 ${MYPROJECT_EIGEN_MIN_VERSION} CONFIG)
+endif()
+")
 endif()
 
 # Tests are optional and do not add a dependency to the installed package.

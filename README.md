@@ -1,6 +1,6 @@
 # MyProject
 
-一个基于 CMake 的跨平台 C++20 库项目起点。包含单元测试、示例、命令行工具和 CI，既能独立构建，也能通过 `add_subdirectory()` 或 `find_package()` 被其他项目使用。
+一个基于 CMake 的跨平台 C++20 库项目起点。以直线最小二乘拟合为例：Eigen 负责计算，fmt 负责结果输出；包含单元测试、示例、命令行工具和 CI，支持独立构建、源码嵌入和安装后使用。
 
 ## 快速开始
 
@@ -20,7 +20,7 @@ cmake --build build --config Debug
 ctest --test-dir build -C Debug --output-on-failure
 ```
 
-独立构建在单配置生成器下默认使用 Debug。首次配置时，如未找到已安装的依赖，CPM 会自动下载所需源码。
+独立构建在单配置生成器下默认使用 Debug。首次配置时，如未找到已安装的依赖，CPM 会自动下载所需源码。`myproject_example` 展示库调用，`myproject_fit examples/samples.txt` 从两列文本数据中拟合直线。
 
 ## 项目结构
 
@@ -54,30 +54,9 @@ script/              项目初始化脚本
 
 ## 第三方依赖
 
-依赖在 [`cmake/Dependencies.cmake`](cmake/Dependencies.cmake) 中声明，使用 CPM 原生的 `CPMFindPackage()`：先复用父项目已有 target，否则查找满足版本要求的安装包，找不到时自动获取固定源码版本。fmt 的最低版本及下载版本为 12.2.0，GoogleTest 为 1.18.0；后者仅用于测试。安装包可接受的更新版本由依赖自己的 CMake 版本配置决定，并不限于同一主版本。
+依赖统一在 [`cmake/Dependencies.cmake`](cmake/Dependencies.cmake) 中获取、链接并声明安装包要求；添加或修改库依赖只需编辑这个文件。优先复用父项目 target 或兼容的安装包，否则由 CPM 下载固定版本。父项目提供的 target 由父项目保证兼容性。
 
-独立构建默认将源码缓存放在 `.cache/cpm`，不同构建目录可以复用。也可以通过环境变量 `CPM_SOURCE_CACHE` 或 `-DCPM_SOURCE_CACHE=/path/to/cache` 指定跨项目缓存；命令行设置优先。缓存包含源码，不包含可跨工具链复用的二进制。
-
-依赖来源直接用 CPM 的选项控制，无额外的模板开关：
-
-| 配置参数 | 用途 |
-| --- | --- |
-| `-DCPM_LOCAL_PACKAGES_ONLY=ON` | 只接受已安装包，缺失或版本不满足时配置失败 |
-| `-DCPM_DOWNLOAD_ALL=ON` | 跳过默认的本地包查找，使用源码依赖 |
-| `-DCPM_DOWNLOAD_fmt=ON` | 仅对 fmt 跳过默认的本地包查找 |
-| `-DCPM_fmt_SOURCE=/path/to/fmt` | 在进入源码路径时改用本地 fmt 源码；可配合上一项确保不被安装包抢先匹配 |
-
-父项目已有的 `fmt::fmt` / `GTest::gtest_main` 始终优先，兼容性由父项目负责。CPM 对已加入依赖采用先到先得，版本过低通常只警告，不会自动替换；这些来源开关也不会替换已有 target。
-
-需要集中固定传递依赖时，由顶层项目在引入子项目之前使用 CPM 的 package lock：
-
-```cmake
-include(third_party/myproject/cmake/CPM.cmake)
-CPMUsePackageLock("${CMAKE_CURRENT_SOURCE_DIR}/package-lock.cmake")
-add_subdirectory(third_party/myproject)
-```
-
-运行 `cmake --build build --target cpm-update-package-lock` 生成或更新 lock 文件，将其纳入版本控制。需要固定源码构建时，同时使用 `CPM_DOWNLOAD_ALL=ON`，避免兼容的本地安装包抢先匹配。lock 统一 CPM 源码声明，不负责求解版本冲突或覆盖父项目已存在的 target。
+源码默认缓存到 `.cache/cpm`，可用 `CPM_SOURCE_CACHE` 环境变量或 `-DCPM_SOURCE_CACHE=/path/to/cache` 覆盖。其他选项见 [CPM 文档](https://github.com/cpm-cmake/CPM.cmake#options)。
 
 ## 供其他项目使用
 
@@ -101,15 +80,12 @@ find_package(myproject CONFIG REQUIRED)
 target_link_libraries(your_app PRIVATE myproject::myproject)
 ```
 
-静态库安装包保留 fmt 链接依赖：复用消费方已有的 `fmt::fmt`，否则查找满足 12.2.0 最低要求的安装包。共享库的私有 fmt 不进入消费方链接接口，也不触发 fmt 查找。安装包配置不会下载依赖。
-
-通过 CPM 源码构建 fmt 时，开启 `MYPROJECT_INSTALL` 会同时启用 fmt 的安装规则；复用外部包或父项目 target 时，其交付由提供方负责。若构建共享库，使用方仍需自行安排运行时动态库的位置；构建树中的可执行程序可使用 `myproject_stage_runtime(your_app)` 辅助部署 DLL。
+安装包保留必要的链接依赖，不会下载源码。CPM 获取的 fmt 和 Eigen 会随本库安装，外部依赖由提供方负责交付。共享库使用方需安排运行时库的位置；构建树中的程序可使用 `myproject_stage_runtime(your_app)` 部署 DLL。
 
 ## 检查与贡献
 
 ```sh
 python ci/check_build.py    # 构建、测试、安装及消费方验证
-python ci/check_dependencies.py  # 依赖来源、缓存与父项目覆盖验证
 python ci/check_format.py   # 需要 clang-format 23.1.1
 ```
 
