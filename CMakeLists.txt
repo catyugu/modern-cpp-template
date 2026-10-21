@@ -95,7 +95,7 @@ target_include_directories(myproject PUBLIC
 )
 target_link_libraries(myproject PRIVATE
     $<BUILD_INTERFACE:myproject_options>
-    ${MYPROJECT_PRIVATE_LIBRARIES}
+    fmt::fmt
 )
 
 # C++20 是 myproject 向使用方发布的唯一要求
@@ -153,6 +153,15 @@ if(MYPROJECT_INSTALL)
     )
 
     include(CMakePackageConfigHelpers)
+
+    # Only static exports retain this PRIVATE link dependency. Source-fetched
+    # fmt has its install rules enabled above; external fmt stays external.
+    get_target_property(_myproject_type myproject TYPE)
+    if(_myproject_type STREQUAL "STATIC_LIBRARY")
+        set(MYPROJECT_FIND_FMT ON)
+    else()
+        set(MYPROJECT_FIND_FMT OFF)
+    endif()
 
     install(EXPORT myprojectTargets
         FILE myprojectTargets.cmake

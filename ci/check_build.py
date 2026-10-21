@@ -67,7 +67,11 @@ def check_linkage(args, workspace, linkage, warning_flag):
 
         # Consume only this run's install; never search a stale prefix or source tree.
         consumer = root / "consumer"
-        configure(REPO / "ci" / "consumer", consumer, f"-DCMAKE_PREFIX_PATH={prefix}")
+        consumer_options = [f"-DCMAKE_PREFIX_PATH={prefix}"]
+        if linkage == "shared":
+            # A shared library's PRIVATE fmt must not trigger package lookup.
+            consumer_options.append("-DCMAKE_DISABLE_FIND_PACKAGE_fmt=ON")
+        configure(REPO / "ci" / "consumer", consumer, *consumer_options)
         build(consumer)
         test(consumer, args.config, required={"consumer.smoke"})
 

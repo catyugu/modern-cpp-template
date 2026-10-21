@@ -9,7 +9,7 @@ project(myproject_consumer LANGUAGES CXX)
 # policy as the build tree (including for a static library's link interface).
 option(MYPROJECT_PREPROVIDE_FMT "Test package reuse of an existing fmt target" OFF)
 if(MYPROJECT_PREPROVIDE_FMT)
-    find_package(fmt 12 REQUIRED CONFIG)
+    find_package(fmt 12.2.0 REQUIRED CONFIG)
     set(CMAKE_DISABLE_FIND_PACKAGE_fmt ON)
 endif()
 find_package(myproject REQUIRED CONFIG)
