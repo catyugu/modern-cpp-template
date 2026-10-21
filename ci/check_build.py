@@ -67,16 +67,23 @@ def check_linkage(args, workspace, linkage, warning_flag):
 
         # Consume only this run's install; never search a stale prefix or source tree.
         consumer = root / "consumer"
-        configure(REPO / "ci" / "consumer", consumer, f"-DCMAKE_PREFIX_PATH={prefix}")
+        consumer_options = [f"-DCMAKE_PREFIX_PATH={prefix}"]
+        if linkage == "shared":
+            # Shared exports must not require private implementation packages.
+            consumer_options += [
+                "-DCMAKE_DISABLE_FIND_PACKAGE_fmt=ON",
+                "-DCMAKE_DISABLE_FIND_PACKAGE_Eigen3=ON",
+            ]
+        configure(REPO / "ci" / "consumer", consumer, *consumer_options)
         build(consumer)
         test(consumer, args.config, required={"consumer.smoke"})
 
-        # The consumer already owns fmt::fmt and forbids a second package
-        # lookup. Imported static targets must still retain fmt's link edge.
+        # Existing dependency targets must be reused; static imports must
+        # still preserve both dependency link edges.
         preprovided = root / "consumer-preprovided"
         configure(
             REPO / "ci" / "consumer", preprovided,
-            f"-DCMAKE_PREFIX_PATH={prefix}", "-DMYPROJECT_PREPROVIDE_FMT=ON",
+            f"-DCMAKE_PREFIX_PATH={prefix}", "-DMYPROJECT_PREPROVIDE_DEPENDENCIES=ON",
         )
         build(preprovided)
         test(preprovided, args.config, required={"consumer.smoke"})

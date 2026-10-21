@@ -1,48 +1,62 @@
-#include "myproject/cli.hpp"
 #include "myproject/core.hpp"
+#include <array>
+#include <cmath>
 #include <gtest/gtest.h>
-#include <string>
-#include <vector>
+#include <limits>
+#include <stdexcept>
 
-namespace {
-
-    myproject::cli::Arguments parse(const std::vector<std::string>& arguments)
-    {
-        std::vector<const char*> argv;
-        argv.reserve(arguments.size());
-        for (const auto& argument : arguments) {
-            argv.push_back(argument.c_str());
-        }
-
-        return myproject::cli::parse(static_cast<int>(argv.size()), const_cast<char**>(argv.data()));
-    }
-
-} // namespace
-
-TEST(CoreTest, GreetingFormat)
+TEST(LinearFitTest, FitsAnExactLine)
 {
-    EXPECT_EQ(myproject::get_greeting("Alice"), "Hello, Alice! Welcome to modern C++20.");
+    const std::array<myproject::Sample, 3> samples {{{0, 1}, {1, 3}, {2, 5}}};
+    const auto fit = myproject::fit_line(samples);
+    EXPECT_NEAR(fit.slope, 2.0, 1e-12);
+    EXPECT_NEAR(fit.intercept, 1.0, 1e-12);
+    EXPECT_NEAR(fit.rmse, 0.0, 1e-12);
+    EXPECT_NEAR(fit.predict(4), 9.0, 1e-12);
 }
 
-TEST(CliTest, UsesWorldWhenNoNameIsGiven)
+TEST(LinearFitTest, FitsNoisySamples)
 {
-    EXPECT_EQ(parse({"myproject"}).name, "World");
+    const std::array<myproject::Sample, 4> samples {{{0, 1}, {1, 3}, {2, 4}, {3, 7}}};
+    const auto fit = myproject::fit_line(samples);
+    EXPECT_NEAR(fit.slope, 1.9, 1e-12);
+    EXPECT_NEAR(fit.intercept, 0.9, 1e-12);
+    EXPECT_NEAR(fit.rmse, std::sqrt(0.175), 1e-12);
 }
 
-TEST(CliTest, ParsesNameOption)
+TEST(LinearFitTest, FitsAConstantResponse)
 {
-    const auto arguments = parse({"myproject", "--name", "Alice"});
-
-    EXPECT_EQ(arguments.name, "Alice");
-    EXPECT_FALSE(arguments.help);
+    const std::array<myproject::Sample, 3> samples {{{-1, 3}, {0, 3}, {1, 3}}};
+    const auto fit = myproject::fit_line(samples);
+    EXPECT_NEAR(fit.slope, 0.0, 1e-12);
+    EXPECT_NEAR(fit.intercept, 3.0, 1e-12);
 }
 
-TEST(CliTest, ParsesHelpFlag)
+TEST(LinearFitTest, RejectsInsufficientSamples)
 {
-    EXPECT_TRUE(parse({"myproject", "-h"}).help);
+    const std::array<myproject::Sample, 1> samples {{{0, 1}}};
+    EXPECT_THROW(myproject::fit_line({}), std::invalid_argument);
+    EXPECT_THROW(myproject::fit_line(samples), std::invalid_argument);
 }
 
-TEST(CliTest, RejectsUnknownOptionWithLibraryError)
+TEST(LinearFitTest, RejectsIndeterminateSlope)
 {
-    EXPECT_THROW(parse({"myproject", "--unknown"}), myproject::cli::ParseError);
+    const std::array<myproject::Sample, 2> samples {{{1, 2}, {1, 3}}};
+    EXPECT_THROW(myproject::fit_line(samples), std::invalid_argument);
+}
+
+TEST(LinearFitTest, RejectsNonfiniteCoordinates)
+{
+    const double infinity = std::numeric_limits<double>::infinity();
+    const double nan = std::numeric_limits<double>::quiet_NaN();
+    const std::array<myproject::Sample, 2> infinite {{{0, 1}, {infinity, 2}}};
+    const std::array<myproject::Sample, 2> missing {{{0, nan}, {1, 2}}};
+    EXPECT_THROW(myproject::fit_line(infinite), std::invalid_argument);
+    EXPECT_THROW(myproject::fit_line(missing), std::invalid_argument);
+}
+
+TEST(LinearFitTest, FormatsTheResult)
+{
+    const myproject::LinearFit fit {2, 1, 0};
+    EXPECT_EQ(myproject::format_fit(fit), "y = 2 * x + 1; RMSE = 0");
 }

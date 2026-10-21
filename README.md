@@ -1,6 +1,6 @@
 # MyProject
 
-一个基于 CMake 的跨平台 C++20 库项目起点。包含单元测试、示例、命令行工具和 CI，既能独立构建，也能通过 `add_subdirectory()` 或 `find_package()` 被其他项目使用。
+一个基于 CMake 的跨平台 C++20 库项目起点。以直线最小二乘拟合为例：Eigen 负责计算，fmt 负责结果输出；包含单元测试、示例、命令行工具和 CI，支持独立构建、源码嵌入和安装后使用。
 
 ## 快速开始
 
@@ -20,7 +20,7 @@ cmake --build build --config Debug
 ctest --test-dir build -C Debug --output-on-failure
 ```
 
-独立构建在单配置生成器下默认使用 Debug。首次配置时，如未找到已安装的依赖，CPM 会自动下载所需源码。
+独立构建在单配置生成器下默认使用 Debug。首次配置时，如未找到已安装的依赖，CPM 会自动下载所需源码。`myproject_example` 展示库调用，`myproject_fit examples/samples.txt` 从两列文本数据中拟合直线。
 
 ## 项目结构
 
@@ -52,7 +52,11 @@ script/              项目初始化脚本
 
 独立构建默认开启测试、示例、工具和安装；作为子项目时这些功能默认关闭。初始化后，选项中的 `MYPROJECT` 会替换为新项目名的大写形式。
 
-第三方依赖统一在 [`cmake/Dependencies.cmake`](cmake/Dependencies.cmake) 中维护。模板使用 `fmt`，测试使用 GoogleTest；优先复用现有 target 或已安装包，不存在时由 CPM 获取固定版本。
+## 第三方依赖
+
+依赖统一在 [`cmake/Dependencies.cmake`](cmake/Dependencies.cmake) 中获取、链接并声明安装包要求；添加或修改库依赖只需编辑这个文件。优先复用父项目 target 或兼容的安装包，否则由 CPM 下载固定版本。父项目提供的 target 由父项目保证兼容性。
+
+源码默认缓存到 `.cache/cpm`，可用 `CPM_SOURCE_CACHE` 环境变量或 `-DCPM_SOURCE_CACHE=/path/to/cache` 覆盖。其他选项见 [CPM 文档](https://github.com/cpm-cmake/CPM.cmake#options)。
 
 ## 供其他项目使用
 
@@ -76,7 +80,7 @@ find_package(myproject CONFIG REQUIRED)
 target_link_libraries(your_app PRIVATE myproject::myproject)
 ```
 
-安装包会复用已有的 `fmt::fmt`，否则查找兼容的 fmt 12 包；静态链接时也会保留必要的链接依赖。若构建共享库，使用方仍需自行安排运行时动态库的位置；构建树中的可执行程序可使用 `myproject_stage_runtime(your_app)` 辅助部署 DLL。
+安装包保留必要的链接依赖，不会下载源码。CPM 获取的 fmt 和 Eigen 会随本库安装，外部依赖由提供方负责交付。共享库使用方需安排运行时库的位置；构建树中的程序可使用 `myproject_stage_runtime(your_app)` 部署 DLL。
 
 ## 检查与贡献
 

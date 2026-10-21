@@ -1,28 +1,11 @@
-#include "myproject/cli.hpp"
-#include "myproject/config.h"
 #include "myproject/core.hpp"
+#include <array>
 #include <iostream>
 
-int main(int argc, char** argv)
+int main()
 {
-    myproject::cli::Arguments arguments;
-    try {
-        arguments = myproject::cli::parse(argc, argv);
-    }
-    catch (const myproject::cli::ParseError& error) {
-        std::cerr << error.what() << '\n'
-                  << myproject::cli::usage() << '\n';
-        return 1;
-    }
-
-    if (arguments.help) {
-        std::cout << myproject::cli::usage() << '\n';
-        return 0;
-    }
-
-    std::cout << myproject::get_greeting(arguments.name) << '\n';
-
-    std::cout << "The project version is: " << myproject::config::VERSION << '\n';
-
-    return 0;
+    const std::array<myproject::Sample, 4> samples {{{0, 1}, {1, 3}, {2, 4}, {3, 7}}};
+    const auto fit = myproject::fit_line(samples);
+    std::cout << myproject::format_fit(fit) << '\n';
+    std::cout << "Prediction at x = 4: " << fit.predict(4) << '\n';
 }

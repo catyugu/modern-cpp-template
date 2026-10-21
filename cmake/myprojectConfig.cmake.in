@@ -1,12 +1,7 @@
 @PACKAGE_INIT@
 
 include(CMakeFindDependencyMacro)
-# Respect a dependency target already provided by the consuming project.
-# Static exports retain PRIVATE link dependencies as $<LINK_ONLY:fmt::fmt>,
-# so fmt::fmt must still exist when importing a static myproject library.
-if(NOT TARGET fmt::fmt)
-    find_dependency(fmt @MYPROJECT_FMT_FIND_VERSION@ CONFIG)
-endif()
+@MYPROJECT_PACKAGE_DEPENDENCIES@
 
 include("${CMAKE_CURRENT_LIST_DIR}/myprojectTargets.cmake")
 

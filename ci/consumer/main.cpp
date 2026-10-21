@@ -1,32 +1,26 @@
-// Consumer of the installed package. Exercises the public API, including
-// catching the library's exception by type across the DSO boundary when the
-// library is built as a shared library.
-#include "myproject/cli.hpp"
 #include "myproject/config.h"
-#include "myproject/config.h" // A public header must be safe to include more than once.
+#include "myproject/config.h" // Public headers must be safe to include twice.
 #include "myproject/core.hpp"
-
-#include <cstdio>
-#include <string>
+#include <array>
+#include <cmath>
+#include <iostream>
+#include <stdexcept>
 
 int main()
 {
-    const std::string greeting = myproject::get_greeting("consumer");
-    std::printf("%s\n", greeting.c_str());
-    std::printf("version=%s\n", std::string(myproject::config::VERSION).c_str());
-
-    int caught = 0;
-    try {
-        char* argv[] = {const_cast<char*>("consumer"), const_cast<char*>("--unknown")};
-        myproject::cli::parse(2, argv);
-    }
-    catch (const myproject::cli::ParseError& error) {
-        caught = 1;
-        std::printf("caught: %s\n", error.what());
-    }
-
-    if (greeting.empty() || caught != 1) {
+    const std::array<myproject::Sample, 3> samples {{{0, 1}, {1, 3}, {2, 5}}};
+    const auto fit = myproject::fit_line(samples);
+    std::cout << myproject::format_fit(fit) << '\n';
+    if (std::abs(fit.slope - 2.0) > 1e-12 || std::abs(fit.predict(4) - 9.0) > 1e-12) {
         return 1;
     }
-    return myproject::cli::usage().empty() ? 1 : 0;
+
+    // Exercise exception propagation across the shared-library boundary too.
+    try {
+        myproject::fit_line({});
+    }
+    catch (const std::invalid_argument&) {
+        return 0;
+    }
+    return 1;
 }

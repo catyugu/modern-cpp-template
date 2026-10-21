@@ -1,29 +1,25 @@
-# Declare dependencies here; consumers of this file link the provided targets.
-# CPMFindPackage tries installed packages first and fetches a pinned fallback.
-set(CPM_DONT_UPDATE_MODULE_PATH ON)
-set(CPM_DONT_CREATE_PACKAGE_LOCK ON)
+# Set the default before CPM initializes its cache; command-line and environment
+# settings belong to the build owner and take precedence.
+if(PROJECT_IS_TOP_LEVEL AND NOT DEFINED CPM_SOURCE_CACHE AND NOT DEFINED ENV{CPM_SOURCE_CACHE})
+    set(CPM_SOURCE_CACHE "${PROJECT_SOURCE_DIR}/.cache/cpm"
+        CACHE PATH "CPM dependency source cache")
+endif()
 if(NOT COMMAND CPMAddPackage)
     include("${CMAKE_CURRENT_LIST_DIR}/CPM.cmake")
 endif()
 
-if(PROJECT_IS_TOP_LEVEL AND NOT DEFINED CPM_SOURCE_CACHE)
-    set(CPM_SOURCE_CACHE "${PROJECT_SOURCE_DIR}/.cache/cpm"
-        CACHE PATH "CPM dependency source cache")
-endif()
+# Keep each dependency's acquisition, link scope, and installed requirement here.
+set(MYPROJECT_PACKAGE_DEPENDENCIES "")
 
-# A pre-existing fmt::fmt target is authoritative, whether provided by a
-# superproject, a package manager, or find_package(). In its absence, require
-# the same compatible fmt major version as the installed CMake package.
-# NOTICE that by default, for external dependencies, you shall set "SYSTEM YES",
-# in order to avoid header file warning pollution.
-set(MYPROJECT_FMT_FIND_VERSION 12)
+# fmt: PRIVATE implementation dependency; trust targets supplied by the parent.
+set(MYPROJECT_FMT_MIN_VERSION 12.2.0)
 if(NOT TARGET fmt::fmt)
     CPMFindPackage(
         NAME fmt
-        VERSION ${MYPROJECT_FMT_FIND_VERSION}
+        VERSION ${MYPROJECT_FMT_MIN_VERSION}
         FIND_PACKAGE_ARGUMENTS CONFIG
         GITHUB_REPOSITORY fmtlib/fmt
-        GIT_TAG 12.2.0
+        GIT_TAG ${MYPROJECT_FMT_MIN_VERSION}
         SYSTEM YES
         OPTIONS
         "FMT_INSTALL ${MYPROJECT_INSTALL}"
@@ -33,12 +29,47 @@ if(NOT TARGET fmt::fmt)
         "FMT_SYSTEM_HEADERS ON"
     )
 endif()
-set(MYPROJECT_PRIVATE_LIBRARIES fmt::fmt)
+target_link_libraries(myproject PRIVATE fmt::fmt)
+
+# PRIVATE dependencies remain in static exports; PUBLIC ones need this for both.
+if(NOT BUILD_SHARED_LIBS)
+    string(APPEND MYPROJECT_PACKAGE_DEPENDENCIES "
+if(NOT TARGET fmt::fmt)
+    find_dependency(fmt ${MYPROJECT_FMT_MIN_VERSION} CONFIG)
+endif()
+")
+endif()
+
+# Eigen: a header-only numerical dependency, kept out of the public API.
+set(MYPROJECT_EIGEN_MIN_VERSION 5.0.0)
+if(NOT TARGET Eigen3::Eigen)
+    CPMFindPackage(
+        NAME Eigen3
+        VERSION ${MYPROJECT_EIGEN_MIN_VERSION}
+        FIND_PACKAGE_ARGUMENTS CONFIG
+        GIT_REPOSITORY https://gitlab.com/libeigen/eigen.git
+        GIT_TAG ${MYPROJECT_EIGEN_MIN_VERSION}
+        SYSTEM YES
+        OPTIONS
+        "EIGEN_BUILD_TESTING OFF"
+        "EIGEN_BUILD_CMAKE_PACKAGE ${MYPROJECT_INSTALL}"
+    )
+endif()
+target_link_libraries(myproject PRIVATE Eigen3::Eigen)
+if(NOT BUILD_SHARED_LIBS)
+    string(APPEND MYPROJECT_PACKAGE_DEPENDENCIES "
+if(NOT TARGET Eigen3::Eigen)
+    find_dependency(Eigen3 ${MYPROJECT_EIGEN_MIN_VERSION} CONFIG)
+endif()
+")
+endif()
 
 # Tests are optional and do not add a dependency to the installed package.
 if(MYPROJECT_BUILD_TESTS AND NOT TARGET GTest::gtest_main)
     CPMFindPackage(
         NAME GTest
+        VERSION 1.18.0
+        FIND_PACKAGE_ARGUMENTS CONFIG
         GITHUB_REPOSITORY google/googletest
         GIT_TAG "v1.18.0"
         SYSTEM YES
