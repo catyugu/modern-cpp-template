@@ -6,7 +6,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-REPO = Path(__file__).resolve().parents[1]
+REPO = Path(__file__).resolve().parents[2]  # .github/scripts/ -> repository root
 
 
 def run(*argv, cwd=None, input_text=None):
@@ -45,7 +45,7 @@ def main():
         # find_package(), reuse fmt::fmt, and work as an add_subdirectory().
         run(
             sys.executable,
-            "ci/check_build.py",
+            ".github/scripts/check_build.py",
             "--generator",
             "Ninja",
             "--config",

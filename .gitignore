@@ -43,7 +43,7 @@ build/
 Build/
 build-*/
 
-# Isolated workspaces used by ci/check_build.py
+# Isolated workspaces used by .github/scripts/check_build.py
 _ci/
 _install/
 __pycache__/

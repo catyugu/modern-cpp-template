@@ -1,0 +1,20 @@
+name: Set up build tools
+description: Install Python, CMake and Ninja at the pinned versions used by CI
+
+inputs:
+  cmake:
+    description: CMake version to install
+    required: true
+  ninja:
+    description: Ninja version to install
+    default: '1.13.2'
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@v6
+      with:
+        python-version: '3.12'
+    - name: Install CMake and Ninja
+      shell: bash
+      run: python -m pip install "cmake==${{ inputs.cmake }}" "ninja==${{ inputs.ninja }}"

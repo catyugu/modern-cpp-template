@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.26)
 
 # A parent project that embeds the library with add_subdirectory. Driven by
-# ci/check_build.py.
+# .github/scripts/check_build.py.
 project(superproject LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -11,7 +11,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # unless testing is already enabled in the tree.
 enable_testing()
 
-add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/../.." myproject-build)
+add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/../../.." myproject-build)
 
 add_executable(superapp src/main.cpp)
 target_link_libraries(superapp PRIVATE myproject::myproject)

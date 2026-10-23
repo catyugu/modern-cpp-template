@@ -9,7 +9,8 @@ import sys
 import tempfile
 from pathlib import Path
 
-REPO = Path(__file__).resolve().parents[1]
+SCRIPTS = Path(__file__).resolve().parent  # .github/scripts/
+REPO = SCRIPTS.parents[1]
 
 
 def run(*command, capture=False):
@@ -91,7 +92,7 @@ def check_linkage(args, workspace, linkage, warning_flag):
                 "-DCMAKE_DISABLE_FIND_PACKAGE_fmt=ON",
                 "-DCMAKE_DISABLE_FIND_PACKAGE_Eigen3=ON",
             ]
-        configure(REPO / "ci" / "consumer", consumer, *consumer_options)
+        configure(SCRIPTS / "consumer", consumer, *consumer_options)
         build(consumer)
         test(consumer, args.config, required={"consumer.smoke"})
 
@@ -99,7 +100,7 @@ def check_linkage(args, workspace, linkage, warning_flag):
         # still preserve both dependency link edges.
         preprovided = root / "consumer-preprovided"
         configure(
-            REPO / "ci" / "consumer",
+            SCRIPTS / "consumer",
             preprovided,
             f"-DCMAKE_PREFIX_PATH={prefix}",
             "-DMYPROJECT_PREPROVIDE_DEPENDENCIES=ON",
@@ -110,7 +111,7 @@ def check_linkage(args, workspace, linkage, warning_flag):
     if args.scope in ("all", "embedded"):
         directory = root / "embedded"
         configure(
-            REPO / "ci" / "superproject",
+            SCRIPTS / "superproject",
             directory,
             warning_flag,
             f"-DBUILD_SHARED_LIBS={shared}",

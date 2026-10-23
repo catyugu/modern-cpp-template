@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.26)
 
 # Out-of-tree consumer of the installed package: find_package() only, no
-# add_subdirectory of the library. Driven by ci/check_build.py.
+# add_subdirectory of the library. Driven by .github/scripts/check_build.py.
 project(myproject_consumer LANGUAGES CXX)
 
 # Existing dependency targets must be reused without a second package lookup.

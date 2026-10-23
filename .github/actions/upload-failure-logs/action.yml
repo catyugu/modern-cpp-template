@@ -1,0 +1,21 @@
+name: Upload failure logs
+description: Upload CMake and CTest logs from the isolated _ci build workspaces
+
+inputs:
+  name:
+    description: Artifact name
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ inputs.name }}
+        path: |
+          _ci/**/CMakeFiles/CMakeConfigureLog.yaml
+          _ci/**/CMakeFiles/CMakeError.log
+          _ci/**/CMakeFiles/CMakeOutput.log
+          _ci/**/Testing/Temporary/*
+        if-no-files-found: ignore

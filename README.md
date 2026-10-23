@@ -31,7 +31,7 @@ tests/               GoogleTest 单元测试
 examples/            示例程序
 tools/               独立命令行工具
 cmake/               构建选项、依赖与安装包配置
-ci/                  构建及消费方验证
+.github/             CI 脚本（scripts/）与工作流（workflows/）
 script/              项目初始化脚本
 ```
 
@@ -85,8 +85,8 @@ target_link_libraries(your_app PRIVATE myproject::myproject)
 ## 检查与贡献
 
 ```sh
-python ci/check_build.py    # 构建、测试、安装及消费方验证
-python ci/check_format.py   # 需要 clang-format 23.1.1
+python .github/scripts/check_build.py    # 构建、测试、安装及消费方验证
+python .github/scripts/check_format.py   # 需要 clang-format 23.1.1
 ```
 
 GitHub Actions 覆盖 Linux、macOS 和 Windows 上的代表性编译器与生成器，并验证模板初始化、静态/动态链接和 Sanitizer。欢迎通过 Issue 或 Pull Request 提出改进。
