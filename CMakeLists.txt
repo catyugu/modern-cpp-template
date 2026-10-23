@@ -68,18 +68,30 @@ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/cmake/config.h.in ${PROJECT_BINARY_DI
 include(cmake/myprojectOptions.cmake)
 
 # Automatically discover new source and header files on reconfiguration.
+# The extensions are the ones a C++ library realistically adds; an unusual one
+# (.m, .mm, .ixx, ...) is a deliberate change of project policy, not a glob gap.
 file(GLOB_RECURSE MYPROJECT_SOURCES CONFIGURE_DEPENDS
-    "${PROJECT_SOURCE_DIR}/src/*.cpp"
-    "${PROJECT_SOURCE_DIR}/src/*.cc"
     "${PROJECT_SOURCE_DIR}/src/*.c"
+    "${PROJECT_SOURCE_DIR}/src/*.cc"
+    "${PROJECT_SOURCE_DIR}/src/*.cpp"
+    "${PROJECT_SOURCE_DIR}/src/*.cxx"
+    "${PROJECT_SOURCE_DIR}/src/*.c++"
 )
 file(GLOB_RECURSE MYPROJECT_HEADERS CONFIGURE_DEPENDS
     "${PROJECT_SOURCE_DIR}/include/*.h"
     "${PROJECT_SOURCE_DIR}/include/*.hpp"
+    "${PROJECT_SOURCE_DIR}/include/*.hxx"
+    "${PROJECT_SOURCE_DIR}/include/*.inl"
+    "${PROJECT_SOURCE_DIR}/include/*.ipp"
+    "${PROJECT_SOURCE_DIR}/include/*.tpp"
 )
 file(GLOB_RECURSE MYPROJECT_PRIVATE_HEADERS CONFIGURE_DEPENDS
     "${PROJECT_SOURCE_DIR}/src/*.h"
     "${PROJECT_SOURCE_DIR}/src/*.hpp"
+    "${PROJECT_SOURCE_DIR}/src/*.hxx"
+    "${PROJECT_SOURCE_DIR}/src/*.inl"
+    "${PROJECT_SOURCE_DIR}/src/*.ipp"
+    "${PROJECT_SOURCE_DIR}/src/*.tpp"
 )
 
 add_library(myproject ${MYPROJECT_SOURCES} ${MYPROJECT_HEADERS} ${MYPROJECT_PRIVATE_HEADERS})
@@ -137,11 +149,10 @@ if(MYPROJECT_INSTALL)
         RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
     )
 
+    # include/ only holds public files, so the whole tree is installed: a header
+    # that pulls in a .inl/.ipp/.tpp companion cannot be shipped half-installed.
     install(DIRECTORY "${PROJECT_SOURCE_DIR}/include/"
         DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-        FILES_MATCHING
-        PATTERN "*.h"
-        PATTERN "*.hpp"
     )
     install(FILES "${PROJECT_BINARY_DIR}/include/myproject/config.h"
         DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/myproject
