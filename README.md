@@ -31,7 +31,7 @@ tests/               GoogleTest 单元测试
 examples/            示例程序
 tools/               独立命令行工具
 cmake/               构建选项、依赖与安装包配置
-.github/             CI 脚本（scripts/）与工作流（workflows/）
+.github/             CI 脚本（scripts/）、工作流（workflows/）与复合 Action（actions/）
 script/              项目初始化脚本
 ```
 
@@ -82,14 +82,36 @@ target_link_libraries(your_app PRIVATE myproject::myproject)
 
 安装包保留必要的链接依赖，不会下载源码。CPM 获取的 fmt 和 Eigen 会随本库安装，外部依赖由提供方负责交付。共享库使用方需安排运行时库的位置；构建树中的程序可使用 `myproject_stage_runtime(your_app)` 部署 DLL。
 
-## 检查与贡献
+## 发布
+
+本仓库是模板而不是已经定型的库，因此 CD 只发布模板自身：
 
 ```sh
-python .github/scripts/check_build.py    # 构建、测试、安装及消费方验证
-python .github/scripts/check_format.py   # 需要 clang-format 23.1.1
+git switch main
+git pull --ff-only
+git tag -a v1.0.0 -m "v1.0.0"
+git push origin v1.0.0
 ```
 
-GitHub Actions 覆盖 Linux、macOS 和 Windows 上的代表性编译器与生成器，并验证模板初始化、静态/动态链接和 Sanitizer。欢迎通过 Issue 或 Pull Request 提出改进。
+推送 Tag 后，`.github/workflows/release.yml` 先确认标签形如 `vX.Y.Z` 且对应提交在 `main` 历史中，再用 `test_template.py` 验证该 Tag 的模板；全部通过后才创建 GitHub Release，Release Notes 自动生成，源码归档由 GitHub 提供。模板的 Tag 版本与初始化后项目的 `MYPROJECT_VERSION` 相互独立，不需要同步。需要分发二进制的下游项目应自行启用 CPack，并按“构建 → CTest → install/stage → 安装包消费验证 → 打包 → 发布资产”的顺序发布。
+
+GitHub Actions 覆盖 Linux、macOS 和 Windows 上的代表性编译器与生成器，并验证模板初始化、静态/动态链接和 Sanitizer。
+
+## 贡献
+
+本地验证按范围执行，每个范围只验证一件事：
+
+```sh
+python .github/scripts/check_build.py --scope build --linkage static     # configure / build / CTest
+python .github/scripts/check_build.py --scope package --linkage shared   # install / find_package / consumer
+python .github/scripts/check_build.py --scope embedded --linkage static  # add_subdirectory
+python .github/scripts/test_template.py                                  # 初始化新工程并端到端验证
+python .github/scripts/check_format.py                                   # 需要 clang-format 23.1.1
+```
+
+`--linkage` 取 `static` 或 `shared`。CI 的 8 个 Job 共用这套范围：只有选定环境执行安装包与消费方验证，依赖源码经 `.cache/cpm`（`CPM_SOURCE_CACHE`）缓存，构建目录不缓存。
+
+欢迎通过 Issue 或 Pull Request 提出改进！
 
 ## 许可证
 
