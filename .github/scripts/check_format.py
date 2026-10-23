@@ -6,7 +6,7 @@ from pathlib import Path
 
 
 def main():
-    repo = Path(__file__).resolve().parents[1]
+    repo = Path(__file__).resolve().parents[2]  # .github/scripts/ -> repository root
     subprocess.run(["clang-format", "--version"], check=True)
     tracked = subprocess.check_output(["git", "ls-files", "-z"], cwd=repo)
     suffixes = {".h", ".hpp", ".cpp", ".cc", ".c"}
@@ -16,7 +16,9 @@ def main():
         raise RuntimeError("No tracked C or C++ sources found")
     failed = False
     for source in sources:
-        result = subprocess.run(["clang-format", "--dry-run", "-Werror", str(repo / source)])
+        result = subprocess.run(
+            ["clang-format", "--dry-run", "-Werror", str(repo / source)], check=False
+        )
         failed |= result.returncode != 0
     print(f"Checked {len(sources)} source files")
     return int(failed)
