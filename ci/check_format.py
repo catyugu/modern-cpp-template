@@ -16,7 +16,9 @@ def main():
         raise RuntimeError("No tracked C or C++ sources found")
     failed = False
     for source in sources:
-        result = subprocess.run(["clang-format", "--dry-run", "-Werror", str(repo / source)])
+        result = subprocess.run(
+            ["clang-format", "--dry-run", "-Werror", str(repo / source)], check=False
+        )
         failed |= result.returncode != 0
     print(f"Checked {len(sources)} source files")
     return int(failed)

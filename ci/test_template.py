@@ -31,8 +31,12 @@ def main():
             ),
         )
         # Run the real interactive initializer without mutating the source tree.
-        run(sys.executable, "script/init_project.py",
-            cwd=project, input_text="FreshProject\nfreshproject\n")
+        run(
+            sys.executable,
+            "script/init_project.py",
+            cwd=project,
+            input_text="FreshProject\nfreshproject\n",
+        )
         assert (project / "include/freshproject/core.hpp").is_file()
         assert (project / "cmake/freshprojectConfig.cmake.in").is_file()
         assert not (project / "include/myproject").exists()
@@ -40,9 +44,16 @@ def main():
         # The renamed CI fixtures must also build an installed package through
         # find_package(), reuse fmt::fmt, and work as an add_subdirectory().
         run(
-            sys.executable, "ci/check_build.py",
-            "--generator", "Ninja", "--config", "Release",
-            "--linkage", "both", "--scope", "all",
+            sys.executable,
+            "ci/check_build.py",
+            "--generator",
+            "Ninja",
+            "--config",
+            "Release",
+            "--linkage",
+            "both",
+            "--scope",
+            "all",
             cwd=project,
         )
         print("Freshly initialized project passed end-to-end checks.")
