@@ -1,105 +1,228 @@
+"""Rename the template placeholders into a fresh project.
+
+The initialization is a one-shot, multi-file rewrite: every step either succeeds,
+is reported as a failure with a non-zero exit code, or is explicitly out of scope
+(binary assets and the directories listed in SKIP_PATTERNS). A partially
+initialized tree must never be reported as a success.
+"""
+
+import argparse
+import fnmatch
 import os
+import re
 import sys
 from pathlib import Path
 
+ROOT = Path(__file__).resolve().parent.parent
 
-def replace_in_file(filepath, replacements):
+# Path components that take no part in renaming or rewriting. The build patterns
+# mirror .gitignore, so a tree that was built before initialization keeps its
+# build outputs untouched; script/ holds this initializer itself.
+SKIP_PATTERNS = (
+    ".git",
+    ".cache",
+    ".ruff_cache",
+    "__pycache__",
+    "_ci",
+    "_deps",
+    "_install",
+    "Build",
+    "build",
+    "build-*",
+    "out",
+    "script",
+)
+
+# Files that only make sense in the template repository.
+TEMPLATE_ONLY_FILES = (
+    ".github/scripts/test_template.py",
+    ".github/workflows/template.yml",
+    "script/README.project.md",
+    "script/init_project.py",
+)
+
+PROJECT_NAME_PATTERN = r"[A-Za-z][A-Za-z0-9_]*"
+NAMESPACE_PATTERN = r"[a-z][a-z0-9_]*"
+
+
+def fail(message):
+    print(f"error: {message}", file=sys.stderr)
+    sys.exit(1)
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--project-name", help="CMake project name, e.g. AwesomeApp")
+    parser.add_argument(
+        "--namespace", help="C++ namespace and CMake package prefix, e.g. awesome"
+    )
+    args = parser.parse_args()
+    if not args.project_name:
+        args.project_name = input(
+            "Enter Project Name (CamelCase, e.g., AwesomeApp): "
+        ).strip()
+    if not args.namespace:
+        args.namespace = input(
+            "Enter Namespace/Prefix (lowercase, e.g., awesome): "
+        ).strip()
+    if not re.fullmatch(PROJECT_NAME_PATTERN, args.project_name):
+        fail(
+            f"invalid project name {args.project_name!r}: use letters, digits and "
+            "underscores, starting with a letter (e.g. AwesomeApp)"
+        )
+    if not re.fullmatch(NAMESPACE_PATTERN, args.namespace):
+        fail(
+            f"invalid namespace {args.namespace!r}: use lowercase letters, digits and "
+            "underscores, starting with a lowercase letter (e.g. awesome)"
+        )
+    if args.project_name == "MyProject" or args.namespace == "myproject":
+        fail(
+            "choose names that differ from the template's MyProject/myproject placeholders"
+        )
+    return args
+
+
+def is_skipped(relative):
+    return any(
+        fnmatch.fnmatchcase(part, pattern)
+        for part in relative.parts
+        for pattern in SKIP_PATTERNS
+    )
+
+
+def walk(root):
+    """Yield (path relative to root, subdirectories, files) for every directory in scope."""
+    for current, dirnames, filenames in os.walk(root):
+        relative = Path(current).relative_to(root)
+        dirnames[:] = sorted(
+            name for name in dirnames if not is_skipped(relative / name)
+        )
+        yield relative, dirnames, sorted(filenames)
+
+
+def plan(root, project_name, namespace):
+    """Collect the renames before touching the tree, so failures leave no half state."""
+    directories = []
+    files = []
+    for relative, dirnames, filenames in walk(root):
+        for name in dirnames:
+            if name == "myproject":
+                directories.append(root / relative / name)
+        for name in filenames:
+            target = name.replace("MyProject", project_name).replace(
+                "myproject", namespace
+            )
+            if target != name:
+                files.append((root / relative / name, target))
+    return directories, files
+
+
+def rename(path, target):
+    if target.exists():
+        fail(f"cannot rename {path.relative_to(ROOT)}: {target.name} already exists")
+    path.rename(target)
+    print(f"renamed {path.relative_to(ROOT)} -> {target.name}")
+
+
+def rewrite_file(path, replacements):
+    data = path.read_bytes()
+    if b"\0" in data:
+        return False  # binary asset: a project placeholder is not meaningful here
     try:
-        with open(filepath, "r", encoding="utf-8") as f:
-            content = f.read()
+        text = data.decode("utf-8")
+    except UnicodeDecodeError:
+        # Not UTF-8 text. Leaving it alone is only safe when it carries no
+        # placeholder; otherwise the tree would be initialized halfway.
+        if any(
+            marker in data.decode("utf-8", errors="replace") for marker in replacements
+        ):
+            fail(
+                f"{path.relative_to(ROOT)} is not UTF-8 text but contains a project placeholder"
+            )
+        return False
+    updated = text
+    for old, new in replacements.items():
+        updated = updated.replace(old, new)
+    if updated == text:
+        return False
+    try:
+        path.write_text(updated, encoding="utf-8", newline="")
+    except OSError as error:
+        fail(f"cannot rewrite {path.relative_to(ROOT)}: {error}")
+    return True
 
-        new_content = content
-        for old, new in replacements.items():
-            new_content = new_content.replace(old, new)
 
-        if content != new_content:
-            with open(filepath, "w", encoding="utf-8") as f:
-                f.write(new_content)
-    except Exception as e:
-        print(f"Skipping {filepath} due to error: {e}")
+def rewrite_tree(root, replacements):
+    changed = 0
+    for relative, _, filenames in walk(root):
+        for name in filenames:
+            changed += rewrite_file(root / relative / name, replacements)
+    return changed
 
 
-# 仓库内不参与改名与内容替换的目录
-SKIP_DIRS = {".git", ".cache", "_ci", "_install", "build", "out", "script"}
+def write_readme(project_name, namespace):
+    template = ROOT / "script" / "README.project.md"
+    text = template.read_text(encoding="utf-8")
+    for marker, value in (
+        ("@@PROJECT_NAME@@", project_name),
+        ("@@NAMESPACE@@", namespace),
+        ("@@UPPER@@", project_name.upper()),
+    ):
+        text = text.replace(marker, value)
+    (ROOT / "README.md").write_text(text, encoding="utf-8", newline="")
+    print(f"wrote README.md for {project_name}")
 
 
-def should_skip(root_dir, root):
-    """跳过仓库内的生成目录、版本控制与脚本自身，避免误改。
-
-    按相对路径的路径分量匹配：检出路径里恰好含 "out"、"build" 这类子串时替换照常生效，
-    而仓库自己的 build/ 等目录不会被改名或替换。
-    """
-    return not SKIP_DIRS.isdisjoint(Path(root).relative_to(root_dir).parts)
+def remove_template_files():
+    removed = []
+    for name in TEMPLATE_ONLY_FILES:
+        path = ROOT / name
+        if path.exists():
+            path.unlink()
+            removed.append(name)
+    script_dir = ROOT / "script"
+    if script_dir.is_dir() and not any(script_dir.iterdir()):
+        script_dir.rmdir()
+    print(f"removed template-only files: {', '.join(removed) if removed else 'none'}")
 
 
 def main():
-    print("=== Modern C++ Project Initializer ===")
-    project_name = input("Enter Project Name (CamelCase, e.g., AwesomeApp): ").strip()
-    namespace_name = input(
-        "Enter Namespace/Prefix (lowercase, e.g., awesome): "
-    ).strip()
-
-    if not project_name or not namespace_name:
-        print("Invalid input. Aborting.")
-        sys.exit(1)
-
-    # 替换规则：将模板占位符替换为用户输入
-    # 顺序：先驼峰(MyProject)与全大写(MYPROJECT)，再小写前缀(myproject)，避免部分替换冲突
+    args = parse_args()
+    project_name = args.project_name
+    namespace = args.namespace
     replacements = {
         "MyProject": project_name,
         "MYPROJECT": project_name.upper(),
-        "myproject": namespace_name,
+        "myproject": namespace,
     }
 
-    # 获取项目根目录 (假设该脚本总是在 script/ 文件夹下)
-    root_dir = Path(__file__).parent.parent.resolve()
+    directories, files = plan(ROOT, project_name, namespace)
+    if not directories and not files:
+        fail(
+            "nothing to initialize: the MyProject/myproject placeholders were not found, "
+            "which means this tree is already initialized"
+        )
 
-    # 1. 自下而上重命名目录 (避免重命名父目录后找不到子目录)
-    #    例如 include/myproject/
-    for root, dirs, files in os.walk(root_dir, topdown=False):
-        if should_skip(root_dir, root):
-            continue
-        for dirname in dirs:
-            if dirname == "myproject":
-                old_path = os.path.join(root, dirname)
-                new_path = os.path.join(root, namespace_name)
-                os.rename(old_path, new_path)
-                print(f"Renamed directory: {old_path} -> {new_path}")
+    # Files first: their parent directories may themselves be renamed afterwards.
+    for path, name in files:
+        rename(path, path.with_name(name))
+    # Deepest directory first, so an already renamed parent never invalidates a
+    # pending path.
+    for path in sorted(directories, key=lambda item: len(item.parts), reverse=True):
+        rename(path, path.with_name(namespace))
 
-    # 2. 自下而上重命名含模板占位符的文件
-    #    例如 cmake/myprojectOptions.cmake -> cmake/<namespace>Options.cmake
-    #    必须先于内容替换，否则 include(cmake/xxx) 路径与实际文件名对不上
-    for root, dirs, files in os.walk(root_dir, topdown=False):
-        if should_skip(root_dir, root):
-            continue
-        for filename in files:
-            new_name = filename
-            if "MyProject" in filename:
-                new_name = new_name.replace("MyProject", project_name)
-            if "myproject" in filename:
-                new_name = new_name.replace("myproject", namespace_name)
-            if new_name != filename:
-                old_path = os.path.join(root, filename)
-                new_path = os.path.join(root, new_name)
-                os.rename(old_path, new_path)
-                print(f"Renamed file: {filename} -> {new_name}")
+    rewritten = rewrite_tree(ROOT, replacements)
+    write_readme(project_name, namespace)
+    remove_template_files()
 
-    # 3. 遍历处理文件内容
-    for root, dirs, files in os.walk(root_dir):
-        if should_skip(root_dir, root):
-            continue
-
-        for filename in files:
-            filepath = os.path.join(root, filename)
-            replace_in_file(filepath, replacements)
-
-    print(f"\n[OK] Project initialized successfully!")
-    print(f"Project Name: {project_name}")
-    print(f"Namespace/Prefix:   {namespace_name}")
-    print("\nYou can now run:")
+    print(
+        f"\nInitialized {project_name} (namespace {namespace}); rewrote {rewritten} files."
+    )
+    print("Next steps:")
     print("  mkdir build && cd build")
     print("  cmake ..")
     print("  cmake --build .")
+    print("  ctest --output-on-failure")
 
 
 if __name__ == "__main__":
