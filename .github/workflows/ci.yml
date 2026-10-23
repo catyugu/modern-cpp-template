@@ -118,24 +118,6 @@ jobs:
         with:
           name: logs-${{ matrix.id }}
 
-  template-e2e:
-    name: Fresh template / init / install / embedded
-    runs-on: ubuntu-24.04
-    timeout-minutes: 25
-    steps:
-      - uses: actions/checkout@v5
-      - uses: ./.github/actions/setup-build-tools
-        with:
-          cmake: '3.26.4'
-      - name: Cache CPM sources
-        uses: actions/cache@v4
-        with:
-          path: .cache/cpm
-          key: cpm-${{ runner.os }}-${{ hashFiles('cmake/Dependencies.cmake', 'cmake/CPM.cmake') }}
-          restore-keys: cpm-${{ runner.os }}-
-      - name: Initialize and verify a freshly named project
-        run: python .github/scripts/test_template.py
-
   sanitizer:
     name: Linux Clang / current CMake / sanitizers
     runs-on: ubuntu-24.04

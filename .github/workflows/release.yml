@@ -6,32 +6,31 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   verify:
     name: Verify the tag
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    # The gate below waits for the commit's own CI, which may take as long as the
+    # slowest platform job.
+    timeout-minutes: 50
     steps:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
-      - name: Verify release tag
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Verify the tag points at a commit on main
         run: |
           [[ "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
           git fetch origin main
           git merge-base --is-ancestor HEAD origin/main
-      - uses: ./.github/actions/setup-build-tools
-        with:
-          cmake: '3.26.4'
-      - name: Cache CPM sources
-        uses: actions/cache@v4
-        with:
-          path: .cache/cpm
-          key: cpm-${{ runner.os }}-${{ hashFiles('cmake/Dependencies.cmake', 'cmake/CPM.cmake') }}
-          restore-keys: cpm-${{ runner.os }}-
-      - name: Verify the template at this tag
-        run: python .github/scripts/test_template.py
+      - name: Wait for the complete CI of this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python .github/scripts/wait_for_ci.py --sha "$(git rev-parse HEAD)"
 
   publish:
     name: Publish the release

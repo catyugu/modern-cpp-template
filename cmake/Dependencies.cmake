@@ -40,7 +40,11 @@ endif()
 ")
 endif()
 
-# Eigen: a header-only numerical dependency, kept out of the public API.
+# Eigen: a header-only implementation dependency of this library. Nothing in the
+# public headers includes it, so it is a build-only requirement: BUILD_LOCAL_INTERFACE
+# keeps it out of the installed static target's link interface, and a consumer of
+# the installed package never has to provide Eigen. fmt stays a real static link
+# dependency and is exported as such.
 set(MYPROJECT_EIGEN_MIN_VERSION 5.0.0)
 if(NOT TARGET Eigen3::Eigen)
     CPMFindPackage(
@@ -55,14 +59,7 @@ if(NOT TARGET Eigen3::Eigen)
         "EIGEN_BUILD_CMAKE_PACKAGE ${MYPROJECT_INSTALL}"
     )
 endif()
-target_link_libraries(myproject PRIVATE Eigen3::Eigen)
-if(NOT BUILD_SHARED_LIBS)
-    string(APPEND MYPROJECT_PACKAGE_DEPENDENCIES "
-if(NOT TARGET Eigen3::Eigen)
-    find_dependency(Eigen3 ${MYPROJECT_EIGEN_MIN_VERSION} CONFIG)
-endif()
-")
-endif()
+target_link_libraries(myproject PRIVATE $<BUILD_LOCAL_INTERFACE:Eigen3::Eigen>)
 
 # Tests are optional and do not add a dependency to the installed package.
 if(MYPROJECT_BUILD_TESTS AND NOT TARGET GTest::gtest_main)

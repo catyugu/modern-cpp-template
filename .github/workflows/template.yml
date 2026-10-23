@@ -1,0 +1,43 @@
+name: Template
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Same convention as ci.yml, but a separate group: the two workflows must not
+# cancel each other.
+concurrency:
+  group: template-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  # Read by check_build.py and by CPM itself; must stay in sync with the cache path.
+  CPM_SOURCE_CACHE: ${{ github.workspace }}/.cache/cpm
+
+jobs:
+  template-e2e:
+    name: Fresh template / init / install / embedded
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup-build-tools
+        with:
+          cmake: '3.26.4'
+      - name: Install formatter
+        run: python -m pip install clang-format==23.1.1
+      - name: Cache CPM sources
+        uses: actions/cache@v4
+        with:
+          path: .cache/cpm
+          key: cpm-${{ runner.os }}-${{ hashFiles('cmake/Dependencies.cmake', 'cmake/CPM.cmake') }}
+          restore-keys: cpm-${{ runner.os }}-
+      - name: Verify the release gate logic
+        run: python .github/scripts/wait_for_ci.py --self-test
+      - name: Initialize a fresh project and run its own checks
+        run: python .github/scripts/test_template.py

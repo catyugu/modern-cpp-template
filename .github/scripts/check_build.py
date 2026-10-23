@@ -89,28 +89,47 @@ def check_package(args, root, library):
     prefix = root / "install"
     run("cmake", "--install", library, "--config", args.config)
 
+    # include/ is installed wholesale (GNUInstallDirs' default INCLUDE dir is
+    # "include" on every platform), so every public file must arrive: a whitelist
+    # that misses .inl/.ipp/.tpp breaks downstream builds.
+    installed_headers = prefix / "include"
+    source_headers = {
+        path.relative_to(REPO / "include")
+        for path in (REPO / "include").rglob("*")
+        if path.is_file()
+    }
+    shipped_headers = {
+        path.relative_to(installed_headers)
+        for path in installed_headers.rglob("*")
+        if path.is_file()
+    }
+    missing = sorted(str(path) for path in source_headers - shipped_headers)
+    if missing:
+        raise RuntimeError(f"Public headers not installed: {missing}")
+
     # Consume only this run's install; never search a stale prefix or source tree.
     consumer = root / "consumer"
     options = [f"-DCMAKE_PREFIX_PATH={prefix}"]
+    # Eigen is an implementation detail of this library: neither linkage may
+    # require the consumer to provide it.
+    options += ["-DCMAKE_DISABLE_FIND_PACKAGE_Eigen3=ON"]
     if args.linkage == "shared":
         # Shared exports must not require private implementation packages.
-        options += [
-            "-DCMAKE_DISABLE_FIND_PACKAGE_fmt=ON",
-            "-DCMAKE_DISABLE_FIND_PACKAGE_Eigen3=ON",
-        ]
+        options += ["-DCMAKE_DISABLE_FIND_PACKAGE_fmt=ON"]
     configure(args, SCRIPTS / "consumer", consumer, *options)
     build(args, consumer)
     test(consumer, args.config, required={"consumer.smoke"})
 
     if args.linkage == "static":
         # Existing dependency targets must be reused instead of being searched
-        # again; static imports must still preserve both dependency link edges.
+        # again; static imports must still preserve the fmt link edge.
         preprovided = root / "consumer-preprovided"
         configure(
             args,
             SCRIPTS / "consumer",
             preprovided,
             f"-DCMAKE_PREFIX_PATH={prefix}",
+            "-DCMAKE_DISABLE_FIND_PACKAGE_Eigen3=ON",
             "-DMYPROJECT_PREPROVIDE_DEPENDENCIES=ON",
         )
         build(args, preprovided)

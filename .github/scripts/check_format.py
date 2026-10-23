@@ -9,7 +9,19 @@ def main():
     repo = Path(__file__).resolve().parents[2]  # .github/scripts/ -> repository root
     subprocess.run(["clang-format", "--version"], check=True)
     tracked = subprocess.check_output(["git", "ls-files", "-z"], cwd=repo)
-    suffixes = {".h", ".hpp", ".cpp", ".cc", ".c"}
+    suffixes = {
+        ".c",
+        ".cc",
+        ".cpp",
+        ".cxx",
+        ".c++",
+        ".h",
+        ".hpp",
+        ".hxx",
+        ".inl",
+        ".ipp",
+        ".tpp",
+    }
     files = [Path(name.decode("utf-8")) for name in tracked.split(b"\0") if name]
     sources = [path for path in files if path.suffix in suffixes]
     if not sources:
