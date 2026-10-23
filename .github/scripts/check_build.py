@@ -1,7 +1,8 @@
-"""Build, test, install and consume the library with the selected toolchain."""
+"""Verify one toolchain with a build, package or embedded scope."""
 
 import argparse
 import json
+import os
 import re
 import shlex
 import subprocess
@@ -26,122 +27,131 @@ def run(*command, capture=False):
     ).stdout
 
 
-def test(
-    build, config, *, required=(), require_library=False, expected_library_tests=()
-):
-    command = ("ctest", "--test-dir", build, "-C", config)
+def configure(args, source, build, *options):
+    command = ["cmake", "-S", source, "-B", build]
+    if args.generator:
+        command += ["-G", args.generator]
+    run(*command, f"-DCMAKE_BUILD_TYPE={args.config}", *args.cmake_flag, *options)
+
+
+def build(args, directory):
+    run(
+        "cmake",
+        "--build",
+        directory,
+        "--config",
+        args.config,
+        "--parallel",
+        args.jobs,
+    )
+
+
+def cpm_cache():
+    return os.environ.get("CPM_SOURCE_CACHE") or REPO / ".cache" / "cpm"
+
+
+def test(directory, config, *, required=()):
+    command = ("ctest", "--test-dir", directory, "-C", config)
     listing = json.loads(run(*command, "--show-only=json-v1", capture=True))
     names = {entry["name"] for entry in listing["tests"]}
-    missing = (set(required) | set(expected_library_tests)) - names
+    missing = set(required) - names
     if missing:
-        raise RuntimeError(f"Tests not registered in {build}: {sorted(missing)}")
-    if require_library and not any(name.startswith("myproject.") for name in names):
-        raise RuntimeError(f"Library tests not registered in {build}")
+        raise RuntimeError(f"Tests not registered in {directory}: {sorted(missing)}")
     run(*command, "--output-on-failure", "--no-tests=error", "--timeout", "60")
-    return {name for name in names if name.startswith("myproject.")}
+    return names
 
 
-def check_linkage(args, workspace, linkage, warning_flag):
-    root = workspace / linkage
+def library_test_names(names, directory):
+    tests = {name for name in names if name.startswith("myproject.")}
+    if not tests:
+        raise RuntimeError(f"Library tests not registered in {directory}")
+    return tests
+
+
+def build_library(args, root):
+    directory = root / "library"
+    configure(
+        args,
+        REPO,
+        directory,
+        f"-DBUILD_SHARED_LIBS={'ON' if args.linkage == 'shared' else 'OFF'}",
+        f"-DCPM_SOURCE_CACHE={cpm_cache()}",
+        f"-DCMAKE_INSTALL_PREFIX={root / 'install'}",
+        "-DMYPROJECT_BUILD_TESTS=ON",
+        "-DMYPROJECT_WERROR=ON",
+    )
+    build(args, directory)
+    names = test(directory, args.config)
+    return directory, library_test_names(names, directory)
+
+
+def check_package(args, root, library):
     prefix = root / "install"
-    shared = "ON" if linkage == "shared" else "OFF"
-    cache = REPO / ".cache" / "cpm"
+    run("cmake", "--install", library, "--config", args.config)
 
-    def configure(source, build, *options):
-        command = ["cmake", "-S", source, "-B", build]
-        if args.generator:
-            command += ["-G", args.generator]
-        if args.toolset:
-            command += ["-T", args.toolset]
-        run(*command, f"-DCMAKE_BUILD_TYPE={args.config}", *args.cmake_flag, *options)
+    # Consume only this run's install; never search a stale prefix or source tree.
+    consumer = root / "consumer"
+    options = [f"-DCMAKE_PREFIX_PATH={prefix}"]
+    if args.linkage == "shared":
+        # Shared exports must not require private implementation packages.
+        options += [
+            "-DCMAKE_DISABLE_FIND_PACKAGE_fmt=ON",
+            "-DCMAKE_DISABLE_FIND_PACKAGE_Eigen3=ON",
+        ]
+    configure(args, SCRIPTS / "consumer", consumer, *options)
+    build(args, consumer)
+    test(consumer, args.config, required={"consumer.smoke"})
 
-    def build(directory):
-        run(
-            "cmake",
-            "--build",
-            directory,
-            "--config",
-            args.config,
-            "--parallel",
-            args.jobs,
-        )
-
-    print(f"\n=== {args.config} / {linkage} ===", flush=True)
-    library_tests = set()
-    if args.scope in ("all", "library"):
-        directory = root / "library"
-        configure(
-            REPO,
-            directory,
-            f"-DBUILD_SHARED_LIBS={shared}",
-            f"-DCPM_SOURCE_CACHE={cache}",
-            f"-DCMAKE_INSTALL_PREFIX={prefix}",
-            "-DMYPROJECT_BUILD_TESTS=ON",
-            "-DMYPROJECT_WERROR=ON",
-        )
-        build(directory)
-        library_tests = test(directory, args.config, require_library=True)
-        run("cmake", "--install", directory, "--config", args.config)
-
-        # Consume only this run's install; never search a stale prefix or source tree.
-        consumer = root / "consumer"
-        consumer_options = [f"-DCMAKE_PREFIX_PATH={prefix}"]
-        if linkage == "shared":
-            # Shared exports must not require private implementation packages.
-            consumer_options += [
-                "-DCMAKE_DISABLE_FIND_PACKAGE_fmt=ON",
-                "-DCMAKE_DISABLE_FIND_PACKAGE_Eigen3=ON",
-            ]
-        configure(SCRIPTS / "consumer", consumer, *consumer_options)
-        build(consumer)
-        test(consumer, args.config, required={"consumer.smoke"})
-
-        # Existing dependency targets must be reused; static imports must
-        # still preserve both dependency link edges.
+    if args.linkage == "static":
+        # Existing dependency targets must be reused instead of being searched
+        # again; static imports must still preserve both dependency link edges.
         preprovided = root / "consumer-preprovided"
         configure(
+            args,
             SCRIPTS / "consumer",
             preprovided,
             f"-DCMAKE_PREFIX_PATH={prefix}",
             "-DMYPROJECT_PREPROVIDE_DEPENDENCIES=ON",
         )
-        build(preprovided)
+        build(args, preprovided)
         test(preprovided, args.config, required={"consumer.smoke"})
 
-    if args.scope in ("all", "embedded"):
-        directory = root / "embedded"
-        configure(
-            SCRIPTS / "superproject",
-            directory,
-            warning_flag,
-            f"-DBUILD_SHARED_LIBS={shared}",
-            f"-DCPM_SOURCE_CACHE={cache}",
-            "-DMYPROJECT_BUILD_TESTS=ON",
-            "-DMYPROJECT_WERROR=ON",
-        )
-        build(directory)
-        test(
-            directory,
-            args.config,
-            required={"superproject.smoke"},
-            require_library=True,
-            expected_library_tests=library_tests,
-        )
+
+def check_embedded(args, root, warning_flag, expected_library_tests):
+    directory = root / "embedded"
+    configure(
+        args,
+        SCRIPTS / "superproject",
+        directory,
+        warning_flag,
+        f"-DBUILD_SHARED_LIBS={'ON' if args.linkage == 'shared' else 'OFF'}",
+        f"-DCPM_SOURCE_CACHE={cpm_cache()}",
+        "-DMYPROJECT_BUILD_TESTS=ON",
+        "-DMYPROJECT_WERROR=ON",
+    )
+    build(args, directory)
+    embedded_tests = test(
+        directory,
+        args.config,
+        required={"superproject.smoke", *expected_library_tests},
+    )
+    library_test_names(embedded_tests, directory)
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", choices=("Debug", "Release"), default="Release")
+    parser.add_argument("--linkage", choices=("static", "shared"), default="static")
     parser.add_argument(
-        "--linkage", choices=("static", "shared", "both"), default="both"
-    )
-    parser.add_argument(
-        "--scope", choices=("all", "library", "embedded"), default="all"
+        "--scope",
+        choices=("build", "package", "embedded", "all"),
+        default="build",
+        help="build: configure/build/CTest; package: install/find_package/consumer; "
+        "embedded: add_subdirectory; all: every scope with one linkage",
     )
     parser.add_argument(
         "--generator", help="CMake generator; defaults to the platform's generator"
     )
-    parser.add_argument("--toolset", help="Visual Studio toolset, e.g. ClangCL")
     parser.add_argument(
         "--jobs", type=int, default=2, help="Maximum parallel build jobs (default: 2)"
     )
@@ -173,13 +183,22 @@ def main():
     )
     print(f"Build workspace: {workspace}", flush=True)
     try:
-        linkages = ("static", "shared") if args.linkage == "both" else (args.linkage,)
-        for linkage in linkages:
-            check_linkage(args, workspace, linkage, warning_flag)
+        library = None
+        expected_library_tests = set()
+        if args.scope in ("build", "package", "all"):
+            library, expected_library_tests = build_library(args, workspace)
+        if args.scope in ("package", "all"):
+            check_package(args, workspace, library)
+        if args.scope in ("embedded", "all"):
+            check_embedded(args, workspace, warning_flag, expected_library_tests)
     except (subprocess.CalledProcessError, RuntimeError) as error:
         print(f"FAILED: {error}\nBuild files and logs: {workspace}", file=sys.stderr)
         return 1
-    print(f"\nAll checks passed. Build files and logs: {workspace}")
+    scope = "all scopes" if args.scope == "all" else f"{args.scope} scope"
+    print(
+        f"\n{scope.capitalize()} passed ({args.linkage}, {args.config}). "
+        f"Build files and logs: {workspace}"
+    )
     return 0
 
 

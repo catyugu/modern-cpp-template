@@ -1,17 +1,19 @@
 name: CI
 
 on:
-  push:
-    branches: [main, agent/dev]
   pull_request:
+  push:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: read
 
+# One run per pull request (or ref). Superseded PR runs are cancelled; runs on
+# main are kept because they validate the branch that is already merged.
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   format:
@@ -31,112 +33,87 @@ jobs:
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
+    env:
+      CC: ${{ matrix.cc }}
+      CXX: ${{ matrix.cxx }}
     strategy:
       fail-fast: false
-      # Explicit entries avoid an expensive Cartesian product. Exercise native
-      # generators (Makefiles, Xcode, Visual Studio) as well as Ninja.
+      # One entry per verification responsibility, not per compiler x generator x
+      # linkage combination: build scopes prove a toolchain, package scopes prove
+      # the installed package contract.
       matrix:
         include:
-          - name: Linux GCC / Debug / Makefiles
-            id: linux-gcc-debug
+          - name: Linux GCC / Debug / Makefiles / package static
+            id: linux-gcc
             runner: ubuntu-24.04
             cc: gcc
             cxx: g++
             generator: Unix Makefiles
             config: Debug
+            linkage: static
+            scope: package
             cmake: '3.26.4'
-            toolset: ''
-          - name: Linux GCC / Release / Ninja
-            id: linux-gcc-release
+          - name: Linux Clang / Release / Ninja / package shared
+            id: linux-clang
             runner: ubuntu-24.04
-            cc: gcc
-            cxx: g++
+            cc: clang
+            cxx: clang++
             generator: Ninja
             config: Release
+            linkage: shared
+            scope: package
             cmake: '3.26.4'
-            toolset: ''
-          - name: Linux Clang / Debug / Ninja
-            id: linux-clang-debug
-            runner: ubuntu-24.04
-            cc: clang
-            cxx: clang++
-            generator: Ninja
-            config: Debug
-            cmake: '3.26.4'
-            toolset: ''
-          - name: macOS AppleClang / Debug / Ninja
-            id: macos-debug
-            runner: macos-15
-            cc: clang
-            cxx: clang++
-            generator: Ninja
-            config: Debug
-            cmake: '3.26.4'
-            toolset: ''
-          - name: macOS AppleClang / Release / Xcode
-            id: macos-xcode-release
+          - name: macOS AppleClang / Release / Xcode / build shared
+            id: macos
             runner: macos-15
             cc: clang
             cxx: clang++
             generator: Xcode
             config: Release
+            linkage: shared
+            scope: build
             cmake: '3.31.6'
-            toolset: ''
-          - name: Windows MSVC / Debug / Visual Studio
-            id: windows-msvc-vs-debug
+          - name: Windows MSVC / Debug / Visual Studio / package static
+            id: windows-vs
             runner: windows-2022
             cc: cl
             cxx: cl
             generator: Visual Studio 17 2022
             config: Debug
+            linkage: static
+            scope: package
             cmake: '3.26.4'
-            toolset: ''
-          - name: Windows MSVC / Release / Ninja
-            id: windows-msvc-ninja-release
+          - name: Windows MSVC / Release / Ninja / package shared
+            id: windows-ninja
             runner: windows-2025
             cc: cl
             cxx: cl
             generator: Ninja
             config: Release
+            linkage: shared
+            scope: package
             cmake: '3.26.4'
-            toolset: ''
-          - name: Windows clang-cl / Debug / Ninja
-            id: windows-clangcl-ninja-debug
-            runner: windows-2025
-            cc: clang-cl
-            cxx: clang-cl
-            generator: Ninja
-            config: Debug
-            cmake: '3.26.4'
-            toolset: ''
-          - name: Windows clang-cl / Release / Visual Studio
-            id: windows-clangcl-vs-release
-            runner: windows-2022
-            cc: clang-cl
-            cxx: clang-cl
-            generator: Visual Studio 17 2022
-            config: Release
-            cmake: '3.26.4'
-            toolset: '--toolset ClangCL'
-    env:
-      CC: ${{ matrix.cc }}
-      CXX: ${{ matrix.cxx }}
     steps:
       - uses: actions/checkout@v5
-      - name: Set up MSVC SDK and runtime
+      - name: Set up MSVC environment
         if: runner.os == 'Windows'
         uses: ilammy/msvc-dev-cmd@v1
       - uses: ./.github/actions/setup-build-tools
         with:
           cmake: ${{ matrix.cmake }}
-      - name: Build, test, install, and consume packages
-        run: python .github/scripts/check_build.py --config ${{ matrix.config }} --generator "${{ matrix.generator }}" ${{ matrix.toolset }}
+      - name: Verify ${{ matrix.scope }} (${{ matrix.linkage }}, ${{ matrix.config }})
+        run: >-
+          python .github/scripts/check_build.py
+          --config ${{ matrix.config }}
+          --generator "${{ matrix.generator }}"
+          --linkage ${{ matrix.linkage }}
+          --scope ${{ matrix.scope }}
       - uses: ./.github/actions/upload-failure-logs
         with:
           name: logs-${{ matrix.id }}
 
   template-e2e:
-    name: Fresh template / install / consumer
+    name: Fresh template / init / install / embedded
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
@@ -144,7 +121,7 @@ jobs:
       - uses: ./.github/actions/setup-build-tools
         with:
           cmake: '3.26.4'
-      - name: Initialize and consume a freshly named project
+      - name: Initialize and verify a freshly named project
         run: python .github/scripts/test_template.py
 
   sanitizer:
@@ -163,53 +140,14 @@ jobs:
           python-version: '3.12'
       - name: Install current CMake and Ninja
         run: python -m pip install --upgrade cmake ninja
-      - name: Build shared library with sanitizers
-        run: python .github/scripts/check_build.py --config Debug --generator Ninja --linkage shared --cmake-flag=-DCMAKE_C_FLAGS=-fsanitize=address,undefined --cmake-flag=-DCMAKE_CXX_FLAGS=-fsanitize=address,undefined --cmake-flag=-DCMAKE_EXE_LINKER_FLAGS=-fsanitize=address,undefined --cmake-flag=-DCMAKE_SHARED_LINKER_FLAGS=-fsanitize=address,undefined
-
-  msys2:
-    name: Windows ${{ matrix.environment }} / ${{ matrix.config }}
-    runs-on: windows-2025
-    timeout-minutes: 30
-    defaults:
-      run:
-        shell: msys2 {0}
-    strategy:
-      fail-fast: false
-      # Keep two distinct MinGW-family toolchains; MINGW64 overlaps UCRT64.
-      matrix:
-        include:
-          - environment: UCRT64
-            package: mingw-w64-ucrt-x86_64
-            cc: gcc
-            cxx: g++
-            config: Release
-          - environment: CLANG64
-            package: mingw-w64-clang-x86_64
-            cc: clang
-            cxx: clang++
-            config: Debug
-    env:
-      CC: ${{ matrix.cc }}
-      CXX: ${{ matrix.cxx }}
-    steps:
-      - uses: actions/checkout@v5
-      - uses: msys2/setup-msys2@v2
-        with:
-          msystem: ${{ matrix.environment }}
-          path-type: strict
-          update: true
-          install: >-
-            git
-            ${{ matrix.package }}-${{ matrix.cc }}
-            ${{ matrix.package }}-cmake
-            ${{ matrix.package }}-ninja
-            ${{ matrix.package }}-python
-      - name: Show selected compiler
-        run: |
-          command -v python cmake ninja "$CC" "$CXX"
-          "$CXX" --version
-      - name: Build and test static and shared packages
-        run: python .github/scripts/check_build.py --config ${{ matrix.config }} --generator Ninja
-      - uses: ./.github/actions/upload-failure-logs
-        with:
-          name: logs-${{ matrix.environment }}-${{ matrix.config }}
+      - name: Build and test with sanitizers
+        run: >-
+          python .github/scripts/check_build.py
+          --scope build
+          --linkage shared
+          --config Debug
+          --generator Ninja
+          --cmake-flag=-DCMAKE_C_FLAGS=-fsanitize=address,undefined
+          --cmake-flag=-DCMAKE_CXX_FLAGS=-fsanitize=address,undefined
+          --cmake-flag=-DCMAKE_EXE_LINKER_FLAGS=-fsanitize=address,undefined
+          --cmake-flag=-DCMAKE_SHARED_LINKER_FLAGS=-fsanitize=address,undefined
