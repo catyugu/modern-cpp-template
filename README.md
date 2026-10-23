@@ -101,20 +101,29 @@ git push origin vX.Y.Z
 
 `main` 分支和版本 Tag 由仓库 Ruleset 保护：合并到 `main` 必须走 Pull Request 且 8 个 CI 检查全部通过，禁止强推和删除分支；`v*` Tag 只有仓库管理员能创建、移动和删除。
 
-## 贡献
+## 本地验证
 
-本地验证按范围执行，每个范围只验证一件事：
+提交前在本地跑与改动相关的最小范围。每个脚本只验证一件事：
 
 ```sh
 python .github/scripts/check_build.py --scope build --linkage static     # configure / build / CTest
 python .github/scripts/check_build.py --scope package --linkage shared   # install / find_package / consumer
 python .github/scripts/check_build.py --scope embedded --linkage static  # add_subdirectory
-python .github/scripts/test_template.py                                  # 初始化非默认名称的新工程并跑它的 CI 检查
+python .github/scripts/test_template.py                                  # 把模板初始化成 AwesomeApp 并跑它的检查
 python .github/scripts/check_format.py                                   # 需要 clang-format 23.1.1
 python .github/scripts/wait_for_ci.py --self-test                        # 发布门禁的判定逻辑
 ```
 
-`--linkage` 取 `static` 或 `shared`。CI 共 8 个 Job：`ci.yml` 的 7 个覆盖三平台的构建、安装包消费、嵌入使用与 Sanitizer，`template.yml` 的 1 个用 `test_template.py` 把模板初始化成 `AwesomeApp` / `awesome`，再在该工程内执行它自己的格式检查和静态/动态包范围验证。
+`--linkage` 取 `static` 或 `shared`，`--scope all` 一次跑完 build/package/embedded。每次运行的构建目录在 `_ci/` 下按范围隔离，依赖源码缓存在 `.cache/cpm`。
+
+CI 复用同一套脚本，共 8 个 Job：`ci.yml` 的 7 个覆盖 Linux、macOS、Windows 的构建、安装包消费、嵌入使用和 Sanitizer；`template.yml` 的 1 个做模板初始化验证。本地不必复现整张矩阵，平台相关的部分交给 CI。
+
+## 贡献
+
+- 有问题或想法先开 Issue，说明场景和期望行为。
+- 改动走 Pull Request：从 `main` 切分支、提交、推送到该分支，然后开 PR。`main` 受规则保护，直接推送会被拒绝，PR 需要 8 个 CI 检查全部通过才能合并。
+- PR 描述里写清改动动机和验证方式：哪些范围在本地跑过（见上一节），哪些依赖 CI 覆盖。
+- 发布由维护者在合并后的 `main` 上打 `vX.Y.Z` Tag；Release 工作流确认该提交的完整 CI 通过后才创建 Release，普通贡献者不需要打 Tag。
 
 欢迎通过 Issue 或 Pull Request 提出改进！
 
