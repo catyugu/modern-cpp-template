@@ -29,8 +29,6 @@ jobs:
       - uses: ./.github/actions/setup-build-tools
         with:
           cmake: '3.26.4'
-      - name: Install formatter
-        run: python -m pip install clang-format==23.1.1
       - name: Cache CPM sources
         uses: actions/cache@v4
         with:
