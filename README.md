@@ -99,7 +99,7 @@ git push origin vX.Y.Z
 
 模板的 Tag 版本与初始化后项目的 `MYPROJECT_VERSION` 相互独立，不需要同步；实际项目应让 CMake 版本与 Git Tag 保持一致。需要分发二进制的下游项目应自行启用 CPack，并按“构建 → CTest → install/stage → 安装包消费验证 → 打包 → 发布资产”的顺序发布。
 
-`main` 分支和版本 Tag 由仓库 Ruleset 保护：合并到 `main` 必须走 Pull Request 且 8 个 CI 检查全部通过，禁止强推和删除分支；`v*` Tag 只有仓库管理员能创建、移动和删除。
+`main` 分支和版本 Tag 由仓库 Ruleset 保护：合并到 `main` 必须走 Pull Request 且 7 个 CI 检查全部通过，禁止强推和删除分支；`v*` Tag 只有仓库管理员能创建、移动和删除。
 
 ## 本地验证
 
@@ -110,18 +110,19 @@ python .github/scripts/check_build.py --scope build --linkage static     # confi
 python .github/scripts/check_build.py --scope package --linkage shared   # install / find_package / consumer
 python .github/scripts/check_build.py --scope embedded --linkage static  # add_subdirectory
 python .github/scripts/test_template.py                                  # 把模板初始化成 AwesomeApp 并跑它的检查
-python .github/scripts/check_format.py                                   # 需要 clang-format 23.1.1
 python .github/scripts/wait_for_ci.py --self-test                        # 发布门禁的判定逻辑
 ```
 
 `--linkage` 取 `static` 或 `shared`，`--scope all` 一次跑完 build/package/embedded。每次运行的构建目录在 `_ci/` 下按范围隔离，依赖源码缓存在 `.cache/cpm`。
 
-CI 复用同一套脚本，共 8 个 Job：`ci.yml` 的 7 个覆盖 Linux、macOS、Windows 的构建、安装包消费、嵌入使用和 Sanitizer；`template.yml` 的 1 个做模板初始化验证。本地不必复现整张矩阵，平台相关的部分交给 CI。
+CI 复用同一套脚本，共 7 个 Job：`ci.yml` 的 6 个覆盖 Linux、macOS、Windows 的构建、安装包消费、嵌入使用和 Sanitizer；`template.yml` 的 1 个做模板初始化验证。本地不必复现整张矩阵，平台相关的部分交给 CI。
+
+格式不入 CI：`.clang-format` 是编辑器和 `clang-format -i` 的依据，评审时按需处理，不阻塞合并。
 
 ## 贡献
 
 - 有问题或想法先开 Issue，说明场景和期望行为。
-- 改动走 Pull Request：从 `main` 切分支、提交、推送到该分支，然后开 PR。`main` 受规则保护，直接推送会被拒绝，PR 需要 8 个 CI 检查全部通过才能合并。
+- 改动走 Pull Request：从 `main` 切分支、提交、推送到该分支，然后开 PR。`main` 受规则保护，直接推送会被拒绝，PR 需要 7 个 CI 检查全部通过才能合并。
 - PR 描述里写清改动动机和验证方式：哪些范围在本地跑过（见上一节），哪些依赖 CI 覆盖。
 - 发布由维护者在合并后的 `main` 上打 `vX.Y.Z` Tag；Release 工作流确认该提交的完整 CI 通过后才创建 Release，普通贡献者不需要打 Tag。
 

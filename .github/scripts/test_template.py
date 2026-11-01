@@ -154,8 +154,7 @@ def check_generated_ci(project):
     )
 
     # Same commands as the generated project's ci.yml, restricted to one machine:
-    # the format job and the package scopes of both linkagings.
-    run(sys.executable, ".github/scripts/check_format.py", cwd=project)
+    # both linkagings over every scope.
     for linkage, config in (("static", "Debug"), ("shared", "Release")):
         run(
             sys.executable,
