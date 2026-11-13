@@ -141,7 +141,7 @@ function(myproject_stage_runtime target)
         COMMAND "${CMAKE_COMMAND}"
             "-DMYPROJECT_RUNTIME_DLLS=$<TARGET_RUNTIME_DLLS:${target}>"
             "-DMYPROJECT_RUNTIME_DEST=$<TARGET_FILE_DIR:${target}>"
-            -P "${PROJECT_SOURCE_DIR}/cmake/StageRuntime.cmake"
+            -P "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/cmake/StageRuntime.cmake"
         VERBATIM
     )
 endfunction()
