@@ -2,10 +2,11 @@
 Language: Cpp
 BasedOnStyle: WebKit
 AccessModifierOffset: -4
-AlignAfterOpenBracket: false
+AlignAfterOpenBracket: DontAlign
 AlignEscapedNewlines: Right
 AlignOperands: DontAlign
-AlignTrailingComments: false
+AlignTrailingComments:
+  Kind: Never
 AllowAllParametersOfDeclarationOnNextLine: true
 AllowShortBlocksOnASingleLine: true
 AllowShortCaseLabelsOnASingleLine: false
@@ -22,7 +23,6 @@ ColumnLimit: 0
 CommentPragmas: "^ IWYU pragma:"
 ConstructorInitializerIndentWidth: 4
 ContinuationIndentWidth: 4
-# true：花括号初始化列表不写内层空格（{"n", 1}），与 BasedOnStyle 的容器字面量风格一致
 Cpp11BracedListStyle: true
 DerivePointerAlignment: false
 DisableFormat: false
@@ -32,9 +32,6 @@ IndentWidth: 4
 IndentWrappedFunctionNames: false
 MaxEmptyLinesToKeep: 1
 NamespaceIndentation: All
-ObjCBlockIndentWidth: 4
-ObjCSpaceAfterProperty: true
-ObjCSpaceBeforeProtocolList: true
 PenaltyBreakBeforeFirstCallParameter: 19
 PenaltyBreakComment: 300
 PenaltyBreakFirstLessLess: 120
@@ -46,8 +43,7 @@ SpaceAfterCStyleCast: false
 SpaceBeforeAssignmentOperators: true
 SpaceBeforeParens: ControlStatements
 SpacesBeforeTrailingComments: 1
-SpacesInAngles: false
-SpacesInContainerLiterals: true
+SpacesInAngles: Never
 SpacesInSquareBrackets: false
 Standard: c++20
 TabWidth: 4
