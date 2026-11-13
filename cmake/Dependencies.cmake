@@ -41,7 +41,7 @@ endif()
 endif()
 
 # Eigen: a header-only implementation dependency of this library. Nothing in the
-# public headers includes it, so it is a build-only requirement: BUILD_LOCAL_INTERFACE
+# public headers includes it, so it is a build-only requirement: BUILD_INTERFACE
 # keeps it out of the installed static target's link interface, and a consumer of
 # the installed package never has to provide Eigen. fmt stays a real static link
 # dependency and is exported as such.
@@ -59,7 +59,7 @@ if(NOT TARGET Eigen3::Eigen)
         "EIGEN_BUILD_CMAKE_PACKAGE ${MYPROJECT_INSTALL}"
     )
 endif()
-target_link_libraries(myproject PRIVATE $<BUILD_LOCAL_INTERFACE:Eigen3::Eigen>)
+target_link_libraries(myproject PRIVATE $<BUILD_INTERFACE:Eigen3::Eigen>)
 
 # Tests are optional and do not add a dependency to the installed package.
 if(MYPROJECT_BUILD_TESTS AND NOT TARGET GTest::gtest_main)

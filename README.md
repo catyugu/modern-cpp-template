@@ -4,7 +4,7 @@
 
 ## 快速开始
 
-需要 **CMake 3.26+**、支持 C++20 的编译器（GCC、Clang 或 MSVC）及 Python 3。Ninja 可选，不要求预装第三方 C++ 依赖。
+需要 **CMake 3.22+**、支持 C++20 的编译器（GCC、Clang 或 MSVC）及 Python 3。Ninja 可选，不要求预装第三方 C++ 依赖。
 
 从本模板创建新仓库后，在项目根目录执行：
 

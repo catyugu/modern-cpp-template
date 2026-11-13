@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.26)
+cmake_minimum_required(VERSION 3.22)
 
 # 同一份源码经两条路径被引入时（两个子项目各自 add_subdirectory 本仓库），目标会被重复定义；
 # 已在构建树里就退出，让后一处复用已有目标。
@@ -133,12 +133,16 @@ if(BUILD_SHARED_LIBS)
     )
 endif()
 
-# 把目标的运行时 DLL 拷到它自己所在目录，保证构建树里可直接运行、ctest 能找到。
-# $<TARGET_RUNTIME_DLLS:> 在非 DLL 平台恒为空，所以不需要平台或 BUILD_SHARED_LIBS 判断
+# Stage build-tree runtime DLLs for examples, tools, and tests.
+# CMake 3.22 has TARGET_RUNTIME_DLLS (3.21+) but not "cmake -E copy -t" (3.26+).
+# A script handles an empty DLL list on static builds and non-DLL platforms.
 function(myproject_stage_runtime target)
     add_custom_command(TARGET ${target} POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy -t $<TARGET_FILE_DIR:${target}> $<TARGET_RUNTIME_DLLS:${target}>
-        COMMAND_EXPAND_LISTS
+        COMMAND "${CMAKE_COMMAND}"
+            "-DMYPROJECT_RUNTIME_DLLS=$<TARGET_RUNTIME_DLLS:${target}>"
+            "-DMYPROJECT_RUNTIME_DEST=$<TARGET_FILE_DIR:${target}>"
+            -P "${PROJECT_SOURCE_DIR}/cmake/StageRuntime.cmake"
+        VERBATIM
     )
 endfunction()
 

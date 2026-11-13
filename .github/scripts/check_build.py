@@ -186,8 +186,8 @@ def main():
 
     version = run("cmake", "--version", capture=True)
     match = re.search(r"cmake version (\d+)\.(\d+)\.(\d+)", version)
-    if not match or tuple(map(int, match.groups())) < (3, 26, 0):
-        parser.error("CMake 3.26 or newer is required")
+    if not match or tuple(map(int, match.groups())) < (3, 22, 0):
+        parser.error("CMake 3.22 or newer is required")
     # CMake 4.4 renamed the warning category; the old name is no longer accepted.
     warning_flag = (
         "-Werror=author"

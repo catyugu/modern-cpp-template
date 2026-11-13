@@ -43,7 +43,7 @@ jobs:
             config: Debug
             linkage: static
             scope: package
-            cmake: '3.26.4'
+            cmake: '3.22.6'
           - name: Linux Clang / Release / Ninja / package shared
             id: linux-clang
             runner: ubuntu-24.04
@@ -80,6 +80,7 @@ jobs:
             config: Release
             linkage: shared
             scope: package
+            cmake: '3.22.6'
     steps:
       - uses: actions/checkout@v5
       - name: Set up MSVC environment
