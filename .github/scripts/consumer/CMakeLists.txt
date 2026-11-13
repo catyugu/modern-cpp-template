@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.26)
+cmake_minimum_required(VERSION 3.22)
 
 # Out-of-tree consumer of the installed package: find_package() only, no
 # add_subdirectory of the library. Driven by .github/scripts/check_build.py.

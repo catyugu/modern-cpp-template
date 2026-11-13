@@ -1,8 +1,9 @@
 add_library(myproject_options INTERFACE)
 
-# 前端在配置期就已知，两个变量取常量 0/1，下面继续当条件用。
-# 不用 $<CXX_COMPILER_FRONTEND_VARIANT:...>：那个要 CMake 3.30，会让声明支持的 3.26~3.29 配置失败
-if(CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC")
+# On CMake 3.22 the compiler frontend variant may be unset for MSVC.
+# MSVC covers that case; the variant check additionally handles clang-cl.
+# Avoid $<CXX_COMPILER_FRONTEND_VARIANT:...> (introduced in CMake 3.30).
+if(MSVC OR CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC")
     set(_MYPROJECT_MSVC_FRONTEND 1)
     set(_MYPROJECT_GNU_FRONTEND 0)
 else()
