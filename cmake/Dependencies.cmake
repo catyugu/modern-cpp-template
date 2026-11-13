@@ -40,11 +40,7 @@ endif()
 ")
 endif()
 
-# Eigen: a header-only implementation dependency of this library. Nothing in the
-# public headers includes it, so it is a build-only requirement: BUILD_INTERFACE
-# keeps it out of the installed static target's link interface, and a consumer of
-# the installed package never has to provide Eigen. fmt stays a real static link
-# dependency and is exported as such.
+# Eigen is only needed in the build tree, not by installed consumers.
 set(MYPROJECT_EIGEN_MIN_VERSION 5.0.0)
 if(NOT TARGET Eigen3::Eigen)
     CPMFindPackage(
