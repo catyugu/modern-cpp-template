@@ -1,8 +1,5 @@
 add_library(myproject_options INTERFACE)
 
-# On CMake 3.22 the compiler frontend variant may be unset for MSVC.
-# MSVC covers that case; the variant check additionally handles clang-cl.
-# Avoid $<CXX_COMPILER_FRONTEND_VARIANT:...> (introduced in CMake 3.30).
 if(MSVC OR CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC")
     set(_MYPROJECT_MSVC_FRONTEND 1)
     set(_MYPROJECT_GNU_FRONTEND 0)

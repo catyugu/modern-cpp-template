@@ -133,16 +133,12 @@ if(BUILD_SHARED_LIBS)
     )
 endif()
 
-# Stage build-tree runtime DLLs for examples, tools, and tests.
-# CMake 3.22 has TARGET_RUNTIME_DLLS (3.21+) but not "cmake -E copy -t" (3.26+).
-# A script handles an empty DLL list on static builds and non-DLL platforms.
 function(myproject_stage_runtime target)
     add_custom_command(TARGET ${target} POST_BUILD
-        COMMAND "${CMAKE_COMMAND}"
-            "-DMYPROJECT_RUNTIME_DLLS=$<TARGET_RUNTIME_DLLS:${target}>"
-            "-DMYPROJECT_RUNTIME_DEST=$<TARGET_FILE_DIR:${target}>"
-            -P "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/cmake/StageRuntime.cmake"
-        VERBATIM
+        COMMAND ${CMAKE_COMMAND} -E
+            $<IF:$<BOOL:$<TARGET_RUNTIME_DLLS:${target}>>,copy_if_different,true>
+            $<TARGET_RUNTIME_DLLS:${target}> $<TARGET_FILE_DIR:${target}>
+        COMMAND_EXPAND_LISTS VERBATIM
     )
 endfunction()
 
