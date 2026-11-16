@@ -8,9 +8,6 @@ if(NOT COMMAND CPMAddPackage)
     include("${CMAKE_CURRENT_LIST_DIR}/CPM.cmake")
 endif()
 
-# Keep each dependency's acquisition, link scope, and installed requirement here.
-set(MYPROJECT_PACKAGE_DEPENDENCIES "")
-
 # fmt: PRIVATE implementation dependency; trust targets supplied by the parent.
 set(MYPROJECT_FMT_MIN_VERSION 12.2.0)
 if(NOT TARGET fmt::fmt)
@@ -30,15 +27,6 @@ if(NOT TARGET fmt::fmt)
     )
 endif()
 target_link_libraries(myproject PRIVATE fmt::fmt)
-
-# PRIVATE dependencies remain in static exports; PUBLIC ones need this for both.
-if(NOT BUILD_SHARED_LIBS)
-    string(APPEND MYPROJECT_PACKAGE_DEPENDENCIES "
-if(NOT TARGET fmt::fmt)
-    find_dependency(fmt ${MYPROJECT_FMT_MIN_VERSION} CONFIG)
-endif()
-")
-endif()
 
 # Eigen is only needed in the build tree, not by installed consumers.
 set(MYPROJECT_EIGEN_MIN_VERSION 5.0.0)

@@ -45,7 +45,7 @@ cmake/                   构建选项、依赖与安装包配置
 
 ## 第三方依赖
 
-依赖统一在 [`cmake/Dependencies.cmake`](cmake/Dependencies.cmake) 中获取、链接并声明安装包要求；添加或修改库依赖只需编辑这个文件。Eigen 只在构建本库时需要：它是头文件依赖，没有出现在公开头文件中，因此安装后的静态包不要求消费方提供 Eigen。fmt 是真实的静态链接依赖，静态安装包会为消费方保留这条链接要求。
+依赖在 [`cmake/Dependencies.cmake`](cmake/Dependencies.cmake) 中获取和链接，安装包需要的依赖直接在 `cmake/@@NAMESPACE@@Config.cmake.in` 中声明。Eigen 只在构建本库时需要：它是头文件依赖，没有出现在公开头文件中，因此安装后的静态包不要求消费方提供 Eigen。fmt 是真实的静态链接依赖，静态安装包会为消费方保留这条链接要求。
 
 源码默认缓存到 `.cache/cpm`，可用 `CPM_SOURCE_CACHE` 环境变量或 `-DCPM_SOURCE_CACHE=/path/to/cache` 覆盖。
 
