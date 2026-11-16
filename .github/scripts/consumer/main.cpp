@@ -1,5 +1,3 @@
-#include "myproject/config.h"
-#include "myproject/config.h" // Public headers must be safe to include twice.
 #include "myproject/core.hpp"
 #include <array>
 #include <cmath>

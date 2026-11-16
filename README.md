@@ -54,9 +54,9 @@ script/              项目初始化脚本（仅模板仓库）
 
 ## 第三方依赖
 
-依赖统一在 [`cmake/Dependencies.cmake`](cmake/Dependencies.cmake) 中获取、链接并声明安装包要求；添加或修改库依赖只需编辑这个文件。优先复用父项目 target 或兼容的安装包，否则由 CPM 下载固定版本。父项目提供的 target 由父项目保证兼容性。
+依赖在 [`cmake/Dependencies.cmake`](cmake/Dependencies.cmake) 中获取和链接，安装包需要的依赖直接在 `cmake/myprojectConfig.cmake.in` 中声明。优先复用父项目 target 或兼容的安装包，否则由 CPM 下载固定版本。父项目提供的 target 由父项目保证兼容性。
 
-Eigen 只在本库内部使用，且不出现在公开头文件中，因此用 `$<BUILD_LOCAL_INTERFACE:...>` 保持为构建期依赖：安装后的静态包不要求消费方提供 Eigen。fmt 是真实的静态链接依赖，静态安装包会为消费方保留这条链接要求。共享库两种都不要求。
+Eigen 只在本库内部使用，且不出现在公开头文件中，因此用 `$<BUILD_INTERFACE:...>` 保持为构建期依赖：安装后的静态包不要求消费方提供 Eigen。fmt 是真实的静态链接依赖，静态安装包会为消费方保留这条链接要求。共享库两种都不要求。
 
 源码默认缓存到 `.cache/cpm`，可用 `CPM_SOURCE_CACHE` 环境变量或 `-DCPM_SOURCE_CACHE=/path/to/cache` 覆盖。其他选项见 [CPM 文档](https://github.com/cpm-cmake/CPM.cmake#options)。
 

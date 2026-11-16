@@ -62,9 +62,6 @@ option(MYPROJECT_INSTALL "install library and CMake package" ${PROJECT_IS_TOP_LE
 # 恰好先 include 它时才非空，依赖一变导出目标就静默丢掉 include 目录
 include(GNUInstallDirs)
 
-# 生成的头文件位于构建目录，但保持与安装后一致的 include 布局
-configure_file(${CMAKE_CURRENT_SOURCE_DIR}/cmake/config.h.in ${PROJECT_BINARY_DIR}/include/myproject/config.h)
-
 include(cmake/myprojectOptions.cmake)
 
 # Automatically discover new source and header files on reconfiguration.
@@ -101,7 +98,6 @@ include(cmake/Dependencies.cmake)
 
 target_include_directories(myproject PUBLIC
     $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
-    $<BUILD_INTERFACE:${PROJECT_BINARY_DIR}/include>
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
     PRIVATE
     "${PROJECT_SOURCE_DIR}/src"
@@ -143,50 +139,7 @@ function(myproject_stage_runtime target)
 endfunction()
 
 if(MYPROJECT_INSTALL)
-    install(TARGETS myproject EXPORT myprojectTargets
-        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-    )
-
-    # include/ only holds public files, so the whole tree is installed: a header
-    # that pulls in a .inl/.ipp/.tpp companion cannot be shipped half-installed.
-    install(DIRECTORY "${PROJECT_SOURCE_DIR}/include/"
-        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-    )
-    install(FILES "${PROJECT_BINARY_DIR}/include/myproject/config.h"
-        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/myproject
-    )
-
-    # 许可证随安装产物分发；CMAKE_INSTALL_DOCDIR 由 GNUInstallDirs 按项目名给出
-    install(FILES "${PROJECT_SOURCE_DIR}/LICENSE"
-        DESTINATION ${CMAKE_INSTALL_DOCDIR}
-    )
-
-    include(CMakePackageConfigHelpers)
-
-    install(EXPORT myprojectTargets
-        FILE myprojectTargets.cmake
-        NAMESPACE myproject::
-        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/myproject
-    )
-
-    configure_package_config_file(
-        "${PROJECT_SOURCE_DIR}/cmake/myprojectConfig.cmake.in"
-        "${PROJECT_BINARY_DIR}/myprojectConfig.cmake"
-        INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/myproject
-    )
-    # Apply the same compatibility boundary used by SOVERSION.
-    write_basic_package_version_file(
-        "${PROJECT_BINARY_DIR}/myprojectConfigVersion.cmake"
-        VERSION ${MYPROJECT_VERSION}
-        COMPATIBILITY ${MYPROJECT_VERSION_COMPATIBILITY}
-    )
-    install(FILES
-        "${PROJECT_BINARY_DIR}/myprojectConfig.cmake"
-        "${PROJECT_BINARY_DIR}/myprojectConfigVersion.cmake"
-        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/myproject
-    )
+    include(cmake/Install.cmake)
 endif()
 
 if(MYPROJECT_BUILD_EXAMPLES)

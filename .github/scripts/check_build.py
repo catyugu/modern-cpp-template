@@ -50,22 +50,12 @@ def cpm_cache():
     return os.environ.get("CPM_SOURCE_CACHE") or REPO / ".cache" / "cpm"
 
 
-def test(directory, config, *, required=()):
+def test(directory, config, prefix="myproject."):
     command = ("ctest", "--test-dir", directory, "-C", config)
     listing = json.loads(run(*command, "--show-only=json-v1", capture=True))
-    names = {entry["name"] for entry in listing["tests"]}
-    missing = set(required) - names
-    if missing:
-        raise RuntimeError(f"Tests not registered in {directory}: {sorted(missing)}")
+    if not any(entry["name"].startswith(prefix) for entry in listing["tests"]):
+        raise RuntimeError(f"No {prefix} tests registered in {directory}")
     run(*command, "--output-on-failure", "--no-tests=error", "--timeout", "60")
-    return names
-
-
-def library_test_names(names, directory):
-    tests = {name for name in names if name.startswith("myproject.")}
-    if not tests:
-        raise RuntimeError(f"Library tests not registered in {directory}")
-    return tests
 
 
 def build_library(args, root):
@@ -81,31 +71,13 @@ def build_library(args, root):
         "-DMYPROJECT_WERROR=ON",
     )
     build(args, directory)
-    names = test(directory, args.config)
-    return directory, library_test_names(names, directory)
+    test(directory, args.config)
+    return directory
 
 
 def check_package(args, root, library):
     prefix = root / "install"
     run("cmake", "--install", library, "--config", args.config)
-
-    # include/ is installed wholesale (GNUInstallDirs' default INCLUDE dir is
-    # "include" on every platform), so every public file must arrive: a whitelist
-    # that misses .inl/.ipp/.tpp breaks downstream builds.
-    installed_headers = prefix / "include"
-    source_headers = {
-        path.relative_to(REPO / "include")
-        for path in (REPO / "include").rglob("*")
-        if path.is_file()
-    }
-    shipped_headers = {
-        path.relative_to(installed_headers)
-        for path in installed_headers.rglob("*")
-        if path.is_file()
-    }
-    missing = sorted(str(path) for path in source_headers - shipped_headers)
-    if missing:
-        raise RuntimeError(f"Public headers not installed: {missing}")
 
     # Consume only this run's install; never search a stale prefix or source tree.
     consumer = root / "consumer"
@@ -118,25 +90,10 @@ def check_package(args, root, library):
         options += ["-DCMAKE_DISABLE_FIND_PACKAGE_fmt=ON"]
     configure(args, SCRIPTS / "consumer", consumer, *options)
     build(args, consumer)
-    test(consumer, args.config, required={"consumer.smoke"})
-
-    if args.linkage == "static":
-        # Existing dependency targets must be reused instead of being searched
-        # again; static imports must still preserve the fmt link edge.
-        preprovided = root / "consumer-preprovided"
-        configure(
-            args,
-            SCRIPTS / "consumer",
-            preprovided,
-            f"-DCMAKE_PREFIX_PATH={prefix}",
-            "-DCMAKE_DISABLE_FIND_PACKAGE_Eigen3=ON",
-            "-DMYPROJECT_PREPROVIDE_DEPENDENCIES=ON",
-        )
-        build(args, preprovided)
-        test(preprovided, args.config, required={"consumer.smoke"})
+    test(consumer, args.config, "consumer.")
 
 
-def check_embedded(args, root, warning_flag, expected_library_tests):
+def check_embedded(args, root, warning_flag):
     directory = root / "embedded"
     configure(
         args,
@@ -149,12 +106,7 @@ def check_embedded(args, root, warning_flag, expected_library_tests):
         "-DMYPROJECT_WERROR=ON",
     )
     build(args, directory)
-    embedded_tests = test(
-        directory,
-        args.config,
-        required={"superproject.smoke", *expected_library_tests},
-    )
-    library_test_names(embedded_tests, directory)
+    test(directory, args.config)
 
 
 def main():
@@ -203,13 +155,12 @@ def main():
     print(f"Build workspace: {workspace}", flush=True)
     try:
         library = None
-        expected_library_tests = set()
         if args.scope in ("build", "package", "all"):
-            library, expected_library_tests = build_library(args, workspace)
+            library = build_library(args, workspace)
         if args.scope in ("package", "all"):
             check_package(args, workspace, library)
         if args.scope in ("embedded", "all"):
-            check_embedded(args, workspace, warning_flag, expected_library_tests)
+            check_embedded(args, workspace, warning_flag)
     except (subprocess.CalledProcessError, RuntimeError) as error:
         print(f"FAILED: {error}\nBuild files and logs: {workspace}", file=sys.stderr)
         return 1

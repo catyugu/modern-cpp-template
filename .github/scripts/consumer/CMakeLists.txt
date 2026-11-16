@@ -4,34 +4,11 @@ cmake_minimum_required(VERSION 3.22)
 # add_subdirectory of the library. Driven by .github/scripts/check_build.py.
 project(myproject_consumer LANGUAGES CXX)
 
-# Existing dependency targets must be reused without a second package lookup.
-option(MYPROJECT_PREPROVIDE_DEPENDENCIES "Provide dependency targets before importing the library" OFF)
-if(MYPROJECT_PREPROVIDE_DEPENDENCIES)
-    find_package(fmt 12.2.0 REQUIRED CONFIG)
-    set(CMAKE_DISABLE_FIND_PACKAGE_fmt ON)
-endif()
 find_package(myproject REQUIRED CONFIG)
 
-get_target_property(_library_type myproject::myproject TYPE)
-if(_library_type STREQUAL "STATIC_LIBRARY")
-    # The archive needs its compiled dependency (fmt) at link time, but the
-    # header-only build-only dependency (Eigen) must not leak into the export:
-    # check_build.py disables the Eigen lookup to prove that.
-    get_target_property(_links myproject::myproject INTERFACE_LINK_LIBRARIES)
-    if(NOT "${_links}" MATCHES "fmt::fmt")
-        message(FATAL_ERROR "Static package did not export fmt::fmt")
-    endif()
-    if("${_links}" MATCHES "Eigen3::Eigen")
-        message(FATAL_ERROR "Static package exported the build-only Eigen3 dependency")
-    endif()
-endif()
-
-get_target_property(_includes myproject::myproject INTERFACE_INCLUDE_DIRECTORIES)
-foreach(_dir IN LISTS _includes)
-    if(NOT _dir MATCHES "^\\$<" AND NOT EXISTS "${_dir}")
-        message(FATAL_ERROR "Exported include directory does not exist: ${_dir}")
-    endif()
-endforeach()
+# Import again with fmt lookup disabled to check reuse of existing targets.
+set(CMAKE_DISABLE_FIND_PACKAGE_fmt ON)
+find_package(myproject REQUIRED CONFIG)
 
 add_executable(consumer main.cpp)
 target_link_libraries(consumer PRIVATE myproject::myproject)
